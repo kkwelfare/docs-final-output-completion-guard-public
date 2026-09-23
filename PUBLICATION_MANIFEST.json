@@ -4,7 +4,7 @@
     "archive_root": "docs-final-output-completion-guard-v3/",
     "manifest_self_hash": "omitted_self_referential",
     "license": "MIT",
-    "publication_status": "local_only_not_published"
+    "publication_status": "public_github_main"
   },
   "quality_portability": {
     "authoritative_route": "bundled canonical checker plus docs-quality-ruleset-v3",
@@ -57,5 +57,5 @@
     "archive_receipt": "external inventory and verification receipt bind member paths and SHA-256"
   },
   "recovery_boundary": "quality-portable backup only; not full environment recovery",
-  "external_publication": false
+  "external_publication": true
 }

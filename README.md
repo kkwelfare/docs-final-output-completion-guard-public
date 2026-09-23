@@ -1,6 +1,6 @@
 # docs-final-output-completion-guard quality-portable candidate v3
 
-Release state: local-only candidate prepared for bounded publication review. External publication, repository push, gateway changes, live profile changes, credential changes, and provider calls were not performed by this candidate build.
+Release state: publicly published source repository at https://github.com/kkwelfare/docs-final-output-completion-guard-public on `main`. Repository publication was performed as a separate step; gateway changes, live profile changes, credential changes, and provider calls were not performed by this candidate build.
 
 This archive is a quality-portable backup, not a full environment recovery image. It contains deterministic local quality logic, the canonical final-output checker source, portable contract tests, public producer seams, schemas, and versioned presets. It does not contain a Hermes profile, gateway state, task state, runtime ledgers, credentials, host configuration, a renderer installation, or generated user documents.
 
