@@ -1,0 +1,61 @@
+{
+  "schema_version": "docs-final-output-completion-guard-public-candidate-manifest-3",
+  "candidate": {
+    "archive_root": "docs-final-output-completion-guard-v3/",
+    "manifest_self_hash": "omitted_self_referential",
+    "license": "MIT",
+    "publication_status": "local_only_not_published"
+  },
+  "quality_portability": {
+    "authoritative_route": "bundled canonical checker plus docs-quality-ruleset-v3",
+    "canonical_checker_root": "canonical_checker/",
+    "canonical_checker_files": ["check_document.py", "filter_core.py", "tests/test_filter_core.py"],
+    "provider_route": "optional advisory only; never authoritative",
+    "image_transport": "forbidden",
+    "typed_evidence_boundary": "docs-typed-evidence-boundary-1"
+  },
+  "portable_components": {
+    "host_adapter": "portable/host_adapter.py",
+    "producer_core": "portable/producer_core.py",
+    "format_adapters": "portable/format_adapters.py",
+    "renderer_contract": "portable/renderer_protocol.py",
+    "fake_renderer": "portable/renderer_protocol.py:FakeRenderer",
+    "presets": ["presets/style-default-v1.json", "presets/style-compact-v1.json"],
+    "ruleset": "presets/ruleset-default-v1.json",
+    "schemas": [
+      "schemas/docs-host-adapter-manifest-1.json",
+      "schemas/docs-style-preset-1.json",
+      "schemas/docs-ruleset-1.json",
+      "schemas/docs-renderer-contract-1.json",
+      "schemas/docs-producer-receipt-2.json"
+    ]
+  },
+  "host_boundaries": {
+    "profile_paths": "explicit host manifest only",
+    "renderer_locations": "explicit host manifest or caller output root",
+    "font_discovery": "explicit host roots; no bundled fonts",
+    "task_state": "caller-supplied metadata only",
+    "runtime_wiring": "host-owned; no gateway or provider activation"
+  },
+  "source_lineage": {
+    "live_plugin": "current docs plugin inspected read-only; candidate is not a byte-for-byte mirror",
+    "canonical_checker": "canonical final-output-local-filter source copied into canonical_checker/",
+    "producer_inputs": "public portable seam derived from quality rules and host contract; profile-local producer paths are not embedded"
+  },
+  "excluded_classes": [
+    "credentials and secrets",
+    "task claims, VLR records, and runtime ledgers",
+    "generated user documents and images",
+    "machine-specific executable paths",
+    "gateway/profile configuration",
+    "external provider payloads",
+    "compiled bytecode and test caches"
+  ],
+  "verification_policy": {
+    "offline_tests": "canonical checker tests plus portable contract tests and existing quality suite",
+    "host_integration": "representative local checker/producer readback with provider disabled",
+    "archive_receipt": "external inventory and verification receipt bind member paths and SHA-256"
+  },
+  "recovery_boundary": "quality-portable backup only; not full environment recovery",
+  "external_publication": false
+}

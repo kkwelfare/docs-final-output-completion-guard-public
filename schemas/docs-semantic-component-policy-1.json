@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "docs-semantic-component-policy-1.json",
+  "title": "Generic semantic component policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "tokens", "components", "relations"],
+  "properties": {
+    "schema_version": {"const": "docs-semantic-component-policy-1"},
+    "tokens": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/token"}},
+    "components": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/component"}},
+    "relations": {"type": "array", "items": {"$ref": "#/$defs/relation"}},
+    "boundary_no_contact_policy": {"$ref": "#/$defs/boundary_no_contact_policy"}
+  },
+  "$defs": {
+    "token": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "family", "topology", "divider_policy", "connector_policy", "asset_backend", "wrapper_border", "divider_placement", "divider_anchor"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "family": {"enum": ["plain", "group", "card", "flow", "diagram", "table", "code", "callout"]},
+        "topology": {"enum": ["none", "stack", "paired", "sequence", "hierarchy", "grid", "band"]},
+        "divider_policy": {"enum": ["none", "explicit-between", "grid-only"]},
+        "connector_policy": {"enum": ["none", "directed", "undirected"]},
+        "asset_backend": {"enum": ["none", "native", "svg"]},
+        "wrapper_border": {"enum": ["none", "explicit"]},
+        "divider_placement": {"const": "after"},
+        "divider_anchor": {"const": "previous_block"}
+      }
+    },
+    "member": {
+      "type": "object", "additionalProperties": false, "required": ["member_id", "role"],
+      "properties": {"member_id": {"type": "string", "minLength": 1}, "role": {"enum": ["container", "heading", "body", "item", "code", "asset"]}}
+    },
+    "component": {
+      "type": "object", "additionalProperties": false,
+      "required": ["component_id", "caller_role", "page_index", "selected_token_id", "semantic_group_id", "members"],
+      "properties": {
+        "component_id": {"type": "string", "minLength": 1}, "caller_role": {"type": "string", "minLength": 1},
+        "page_index": {"type": "integer", "minimum": 0}, "selected_token_id": {"type": "string", "minLength": 1},
+        "semantic_group_id": {"type": "string", "minLength": 1},
+        "members": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/member"}}
+      }
+    },
+    "boundary_no_contact_policy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "status", "surface_families", "allowed_overlay_ids"],
+      "properties": {
+        "schema_version": {"const": "docs-semantic-component-boundary-no-contact-policy-1"},
+        "status": {"const": "declared"},
+        "surface_families": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["card", "group"]}},
+        "allowed_overlay_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "member_ownership": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["text_block_id", "component_id"],
+            "properties": {
+              "text_block_id": {"type": "string", "minLength": 1},
+              "component_id": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    },
+    "relation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["relation_id", "kind", "from_member_id", "to_member_id"],
+      "properties": {
+        "relation_id": {"type": "string", "minLength": 1}, "kind": {"enum": ["divider", "connector", "grid"]},
+        "from_member_id": {"type": "string", "minLength": 1}, "to_member_id": {"type": "string", "minLength": 1},
+        "placement": {"enum": ["after", "before"]}, "anchor": {"const": "previous_block"},
+        "override_reason": {"type": "string", "minLength": 1}, "boundary_id": {"type": "string", "minLength": 1}
+      },
+      "allOf": [{"if": {"properties": {"placement": {"const": "before"}}, "required": ["placement"]}, "then": {"required": ["override_reason"]}}]
+    }
+  }
+}

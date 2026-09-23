@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "docs-delivery-candidate-ledger-1.json",
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "handle": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256", "size_bytes"],
+      "properties": {"path": {"type": "string", "pattern": "^/"}, "sha256": {"$ref": "#/$defs/hash"}, "size_bytes": {"type": "integer", "minimum": 0}}
+    },
+    "geometry": {
+      "type": "object", "additionalProperties": false, "required": ["bbox_pt"],
+      "properties": {"bbox_pt": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "number"}}}
+    },
+    "entry": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "candidate_id", "entry_hash", "workflow_id", "task_id", "issue_family", "target_ids", "source_sha256", "artifact_before_sha256", "artifact_after_sha256", "before_geometry", "after_geometry", "repair", "renderer_readback", "genericization_candidate", "previous_entry_hash"],
+      "properties": {
+        "schema_version": {"const": "docs-delivery-candidate-1"},
+        "candidate_id": {"$ref": "#/$defs/hash"}, "entry_hash": {"$ref": "#/$defs/hash"},
+        "workflow_id": {"$ref": "#/$defs/hash"}, "task_id": {"type": "string", "pattern": "^t_[a-z0-9]+$"},
+        "issue_family": {"enum": ["boundary", "containment", "relation", "spacing", "alignment", "safe-wrap", "coverage", "identity"]},
+        "target_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/hash"}},
+        "source_sha256": {"$ref": "#/$defs/hash"}, "artifact_before_sha256": {"$ref": "#/$defs/hash"}, "artifact_after_sha256": {"$ref": "#/$defs/hash"},
+        "before_geometry": {"$ref": "#/$defs/geometry"}, "after_geometry": {"$ref": "#/$defs/geometry"},
+        "repair": {
+          "type": "object", "additionalProperties": false, "required": ["adapter_id", "operation", "producer_mutation"],
+          "properties": {
+            "adapter_id": {"const": "docs-local-repair-adapter-1"},
+            "operation": {"enum": ["geometry_adjustment", "spacing_adjustment", "alignment_adjustment", "wrap_adjustment", "coverage_adjustment", "identity_rebind"]},
+            "producer_mutation": {"const": false}
+          }
+        },
+        "renderer_readback": {"$ref": "#/$defs/handle"},
+        "genericization_candidate": {"type": "boolean"},
+        "previous_entry_hash": {"$ref": "#/$defs/hash"}
+      }
+    }
+  },
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "header", "entries"],
+  "properties": {
+    "schema_version": {"const": "docs-delivery-candidate-ledger-1"},
+    "header": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "workflow_id", "task_id", "mode", "strategy", "source_sha256", "header_hash"],
+      "properties": {
+        "schema_version": {"const": "docs-delivery-candidate-ledger-1"}, "workflow_id": {"$ref": "#/$defs/hash"},
+        "task_id": {"type": "string", "pattern": "^t_[a-z0-9]+$"}, "mode": {"enum": ["harness_development", "deadline_delivery"]},
+        "strategy": {"enum": ["source_first_rebuild", "existing_artifact_repair", "source_repair"]},
+        "source_sha256": {"$ref": "#/$defs/hash"}, "header_hash": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "entries": {"type": "array", "items": {"$ref": "#/$defs/entry"}}
+  }
+}

@@ -1,0 +1,283 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "docs-jev-post-render-receipt-1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "docs-jev-post-render-receipt-1"
+    },
+    "route": {
+      "const": "post-render-jev-structural"
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "artifact": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "pattern": "^/",
+              "maxLength": 4096
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ]
+        },
+        "scan": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "pattern": "^/",
+              "maxLength": 4096
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ]
+        },
+        "artifact_set_id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "producer": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "task_id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+            },
+            "run_id": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "task_id",
+            "run_id"
+          ]
+        },
+        "candidate_set_digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "artifact",
+        "scan",
+        "artifact_set_id",
+        "producer",
+        "candidate_set_digest"
+      ]
+    },
+    "reviewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "run_id": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "task_id",
+        "run_id"
+      ]
+    },
+    "request_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "provider": {
+      "const": "typesafe-system-one"
+    },
+    "model": {
+      "const": "jev-latest"
+    },
+    "execution_mode": {
+      "enum": [
+        "live",
+        "fixture"
+      ]
+    },
+    "provider_invoked": {
+      "type": "boolean"
+    },
+    "advisory_only": {
+      "const": true
+    },
+    "input_kind": {
+      "const": "post-render-metrics"
+    },
+    "status": {
+      "enum": [
+        "accepted",
+        "repair_required",
+        "uncertain",
+        "unresolved"
+      ]
+    },
+    "reason_code": {
+      "enum": [
+        "ok",
+        "disabled",
+        "identity_drift",
+        "invalid_request",
+        "hard_fail",
+        "provider_unavailable",
+        "timeout",
+        "malformed_response",
+        "provider_error",
+        "insufficient_evidence"
+      ]
+    },
+    "measurements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "candidate_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+          },
+          "render_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "metrics_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "candidate_id",
+          "render_sha256",
+          "metrics_sha256"
+        ]
+      },
+      "minItems": 0,
+      "maxItems": 20
+    },
+    "reviews": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "candidate_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+          },
+          "disposition": {
+            "enum": [
+              "accepted",
+              "repair_required",
+              "uncertain"
+            ]
+          },
+          "criteria_results": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "criterion": {
+                      "enum": [
+                        "geometry_consistency",
+                        "line_spacing",
+                        "region_occupancy",
+                        "font_size_consistency"
+                      ]
+                    },
+                    "status": {
+                      "enum": [
+                        "pass",
+                        "fail",
+                        "uncertain"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "criterion",
+                    "status"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "criterion": {
+                      "const": "cjk_glyph_locale"
+                    },
+                    "status": {
+                      "enum": [
+                        "japanese_glyph_likely",
+                        "non_japanese_glyph_likely",
+                        "uncertain"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "criterion",
+                    "status"
+                  ]
+                }
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 4,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "candidate_id",
+          "disposition",
+          "criteria_results"
+        ]
+      },
+      "minItems": 0,
+      "maxItems": 20
+    }
+  },
+  "required": [
+    "schema_version",
+    "route",
+    "binding",
+    "reviewer",
+    "request_sha256",
+    "provider",
+    "model",
+    "execution_mode",
+    "provider_invoked",
+    "advisory_only",
+    "input_kind",
+    "status",
+    "reason_code",
+    "measurements",
+    "reviews"
+  ]
+}

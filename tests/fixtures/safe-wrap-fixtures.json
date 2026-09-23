@@ -1,0 +1,45 @@
+{
+  "schema_version": "docs-safe-wrap-fixtures-1",
+  "defaults": {
+    "frame_width": 240,
+    "margins": [10, 10],
+    "font_size": 12,
+    "max_lines": 6,
+    "safe_ratio": 0.9
+  },
+  "positive": [
+    {
+      "id": "safe-ratio-default-natural-break",
+      "text": "確認する前に、保存する内容を見直します。",
+      "frame_width": 120,
+      "max_lines": 4,
+      "expected_status": "pass"
+    },
+    {
+      "id": "safe-ratio-upper-bound-explicit-sentences",
+      "text": "確認します。\n次へ進みます。",
+      "safe_ratio": 0.92,
+      "expected_status": "pass"
+    }
+  ],
+  "negative": [
+    {"id": "noun-suru-split", "text": "内容を確認\nする", "expected_rule_id": "SAFE-WRAP-NOUN-SURU-SPLIT-01"},
+    {"id": "verb-auxiliary-split", "text": "資料を見られ\nる", "expected_rule_id": "SAFE-WRAP-VERB-AUX-SPLIT-01"},
+    {"id": "polite-form-split", "text": "内容を確認しまし\nた", "expected_rule_id": "SAFE-WRAP-POLITE-FORM-SPLIT-01"},
+    {"id": "one-character-line", "text": "確認します。\n続", "expected_rule_id": "SAFE-WRAP-ONE-CHAR-LINE-01"},
+    {"id": "sentence-punctuation-head", "text": "確認します\n。", "expected_rule_id": "SAFE-WRAP-FORBIDDEN-LINE-HEAD-01"},
+    {"id": "opening-brace-end", "text": "項目（\n説明です）", "expected_rule_id": "SAFE-WRAP-OPENING-BRACKET-END-01"},
+    {"id": "digit-split", "text": "受付番号123\n456", "expected_rule_id": "SAFE-WRAP-DIGIT-SPLIT-01"},
+    {"id": "url-split", "text": "https://example.\ncom/path", "expected_rule_id": "SAFE-WRAP-URL-SPLIT-01"},
+    {"id": "english-split", "text": "English\nWord", "expected_rule_id": "SAFE-WRAP-ENGLISH-SPLIT-01"},
+    {"id": "bracket-pair-boundary", "text": "「確認内容\nです」", "expected_rule_id": "SAFE-WRAP-BRACKET-PAIR-BOUNDARY-01"}
+  ],
+  "historical_false_negative_screenshot_strings": [
+    {"id": "screenshot-confirm-suru", "text": "確認\nする", "expected_rule_id": "SAFE-WRAP-NOUN-SURU-SPLIT-01"},
+    {"id": "screenshot-save-suru", "text": "保存\nする", "expected_rule_id": "SAFE-WRAP-NOUN-SURU-SPLIT-01"},
+    {"id": "screenshot-mirareru", "text": "見られ\nる", "expected_rule_id": "SAFE-WRAP-VERB-AUX-SPLIT-01"},
+    {"id": "screenshot-minaoshimashita", "text": "見直しまし\nた", "expected_rule_id": "SAFE-WRAP-POLITE-FORM-SPLIT-01"},
+    {"id": "screenshot-parenthesis", "text": "（\n12345）", "expected_rule_id": "SAFE-WRAP-OPENING-BRACKET-END-01"},
+    {"id": "screenshot-url", "text": "https://example.com/\na", "expected_rule_id": "SAFE-WRAP-URL-SPLIT-01"}
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "schema_version": "docs-artifact-quality-negative-fixtures-1",
+  "cases": {
+    "source-hash-mismatch": {"rule": "AQ-SOURCE-01", "test": "test_named_contract_and_stale_failures"},
+    "change-scope-mismatch": {"rule": "AQ-CHANGE-01", "test": "test_each_rule_specific_mismatch_blocks"},
+    "identity-hash-mismatch": {"rule": "AQ-IDENTITY-01", "test": "test_each_rule_specific_mismatch_blocks"},
+    "asset-hash-mismatch": {"rule": "AQ-ASSET-01", "test": "test_each_rule_specific_mismatch_blocks"},
+    "duplicate-authority": {"rule": "AQ-AUTHORITY-01", "test": "test_each_rule_specific_mismatch_blocks"},
+    "clip": {"rule": "AQ-BOUNDARY-01", "test": "test_each_rule_specific_mismatch_blocks"},
+    "no-contact": {"rule": "AQ-RELATION-01", "test": "test_each_rule_specific_mismatch_blocks"},
+    "protected-scope-hash-mismatch": {"rule": "AQ-SCOPE-01", "test": "test_each_rule_specific_mismatch_blocks"},
+    "manual-review": {"rule": "AQ-VISIBLE-01", "test": "test_manual_review_and_rendered_source_copy_block"},
+    "fixture-result-mismatch": {"rule": "AQ-FIXTURE-01", "test": "test_each_rule_specific_mismatch_blocks"},
+    "local-crop-only": {"rule": "AQ-LOCAL-GLOBAL-01", "test": "test_each_rule_specific_mismatch_blocks"},
+    "stale-receipt": {"rule": "AQ-HASH-01", "test": "test_named_contract_and_stale_failures"},
+    "fax-render-missing": {"rule": "FAX-RENDER-01", "test": "test_valid_fax_requires_hash_bound_semantic_legibility"},
+    "binary-hash-drift": {"rule": "FAX-BINARY-01", "test": "test_valid_fax_requires_hash_bound_semantic_legibility"},
+    "legibility-fail": {"rule": "FAX-LEGIBILITY-01", "test": "test_valid_fax_requires_hash_bound_semantic_legibility"},
+    "html-source-copy": {"rule": "AQ-DELIVERY-01", "test": "test_manual_review_and_rendered_source_copy_block"},
+    "hash-drift-after-scan": {"rule": "AQ-FINALIZATION-HASH-01", "test": "test_hash_drift_after_scan_block_from_passing_base"},
+    "wrong-target-receipt": {"rule": "AQ-FINALIZATION-TARGET-01", "test": "test_wrong_target_receipt_block_from_passing_base"},
+    "corrupt-receiver-receipt": {"rule": "AQ-RECEIVER-RECEIPT-01", "test": "test_corrupt_receiver_receipt_blocks_without_fallback"},
+    "self-review": {"rule": "AQ-LAYOUT-REVIEW-IDENTITY-01", "test": "test_self_review_block_from_otherwise_valid_review"},
+    "review-null-missing-error": {"rule": "AQ-LAYOUT-REVIEW-01", "test": "test_review_null_missing_or_error_blocks_one_candidate"},
+    "geometry-unit-mismatch": {"rule": "AQ-LAYOUT-01", "test": "test_unit_mismatch_returns_only_geometry_basis_reason"},
+    "cjk-wrap-missing": {"rule": "AQ-LAYOUT-01", "test": "test_cjk_wrap_missing_returns_only_wrap_receipt_reason"},
+    "cjk-bad-break": {"rule": "planned_break_parity", "test": "test_cjk_bad_break_returns_only_planned_parity_rule"},
+    "dead-space-threshold": {"rule": "dead_space_bottom_blank", "test": "test_dead_space_profile_threshold_blocks_only_dead_space_rule"},
+    "receiver-copy-hash-drift": {"rule": "receiver-copy-hash-drift", "test": "test_receiver_copy_hash_drift_blocks_from_passing_base"}
+  }
+}

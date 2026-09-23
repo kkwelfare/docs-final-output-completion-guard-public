@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/docs-renderer-contract-1.json",
+  "title": "Docs renderer contract",
+  "type": "object",
+  "required": ["schema_version", "format", "source_sha256", "style_preset_id", "ruleset_id", "rule_ids"],
+  "properties": {
+    "schema_version": {"const": "docs-renderer-contract-1"},
+    "format": {"type": "string"},
+    "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "line_count": {"type": ["integer", "null"], "minimum": 0},
+    "style_preset_id": {"type": "string"},
+    "ruleset_id": {"type": "string"},
+    "rule_ids": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": false
+}

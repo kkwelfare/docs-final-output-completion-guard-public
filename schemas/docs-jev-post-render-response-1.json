@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "docs-jev-post-render-response-1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "docs-jev-post-render-response-1"
+    },
+    "request_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "reviews": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "candidate_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+          },
+          "disposition": {
+            "enum": [
+              "accepted",
+              "repair_required",
+              "uncertain"
+            ]
+          },
+          "criteria_results": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "criterion": {
+                      "enum": [
+                        "geometry_consistency",
+                        "line_spacing",
+                        "region_occupancy",
+                        "font_size_consistency"
+                      ]
+                    },
+                    "status": {
+                      "enum": [
+                        "pass",
+                        "fail",
+                        "uncertain"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "criterion",
+                    "status"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "criterion": {
+                      "const": "cjk_glyph_locale"
+                    },
+                    "status": {
+                      "enum": [
+                        "japanese_glyph_likely",
+                        "non_japanese_glyph_likely",
+                        "uncertain"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "criterion",
+                    "status"
+                  ]
+                }
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 4,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "candidate_id",
+          "disposition",
+          "criteria_results"
+        ]
+      },
+      "minItems": 1,
+      "maxItems": 20
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_sha256",
+    "reviews"
+  ]
+}

@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "docs-html-pdf-wrap-plan-3.json",
+  "title": "Body-free frame-aware HTML to PDF wrap and spacing plan",
+  "type": "object",
+  "required": ["schema_version", "producer", "status", "source_sha256", "page_size_pt", "frames", "spacing_contract"],
+  "properties": {
+    "schema_version": {"const": "docs-html-pdf-wrap-plan-3"},
+    "producer": {"const": "html-pdf-canonical-3"},
+    "status": {"enum": ["planned", "pass", "block"]},
+    "source_sha256": {"$ref": "#/$defs/hash"},
+    "rendered_pdf_sha256": {"$ref": "#/$defs/hash"},
+    "page_size_pt": {"type": "array", "prefixItems": [{"type": "number", "exclusiveMinimum": 0}, {"type": "number", "exclusiveMinimum": 0}], "minItems": 2, "maxItems": 2},
+    "reason_codes": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "frames": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/frame"}},
+    "spacing_contract": {
+      "type": "object",
+      "required": ["mode", "spacing_pass"],
+      "properties": {"mode": {"enum": ["enforced", "shadow"]}, "spacing_pass": {"type": ["boolean", "null"]}},
+      "additionalProperties": false
+    },
+    "rendered_boundary_check": {"$ref": "#/$defs/rendered"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "pass"}}, "required": ["status"]},
+      "then": {"required": ["rendered_pdf_sha256", "rendered_boundary_check"]}
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {"const": "pass"},
+          "spacing_contract": {"properties": {"mode": {"const": "enforced"}}, "required": ["mode"]}
+        },
+        "required": ["status", "spacing_contract"]
+      },
+      "then": {
+        "properties": {
+          "spacing_contract": {"properties": {"spacing_pass": {"const": true}}},
+          "rendered_boundary_check": {"properties": {"spacing_pass": {"const": true}}}
+        }
+      }
+    }
+  ],
+  "not": {"anyOf": [{"required": ["text"]}, {"required": ["explicit_lines"]}, {"required": ["explicit_text"]}]},
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "bbox": {"type": "array", "prefixItems": [{"type": "number"}, {"type": "number"}, {"type": "number", "exclusiveMinimum": 0}, {"type": "number", "exclusiveMinimum": 0}], "minItems": 4, "maxItems": 4},
+    "font": {
+      "type": "object",
+      "required": ["family", "status", "path", "sha256", "priority", "fallback_decision"],
+      "properties": {
+        "family": {"type": "string", "minLength": 1},
+        "status": {"const": "ud-installed"},
+        "path": {"type": "string", "pattern": "^/"},
+        "sha256": {"$ref": "#/$defs/hash"},
+        "priority": {"type": "string", "minLength": 1},
+        "fallback_decision": {"type": "string", "minLength": 1}
+      }
+    },
+    "stepDeclaration": {
+      "type": "object",
+      "required": ["requested_pt", "applied_pt", "tolerance_pt"],
+      "properties": {
+        "requested_pt": {"type": "number", "minimum": 12},
+        "applied_pt": {"type": "number", "minimum": 12},
+        "effective_pt": {"type": "number", "exclusiveMinimum": 0},
+        "planned_effective_pt": {"type": "number", "exclusiveMinimum": 0},
+        "tolerance_pt": {"type": "number", "exclusiveMinimum": 0},
+        "spacing_pass": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "spacing": {
+      "type": "object",
+      "required": ["mode", "intra_frame_line_step"],
+      "properties": {
+        "mode": {"enum": ["enforced", "shadow"]},
+        "spacing_group_id": {"type": "string", "minLength": 1},
+        "spacing_index": {"type": "integer", "minimum": 0},
+        "intra_frame_line_step": {"$ref": "#/$defs/stepDeclaration"},
+        "inter_frame_item_step": {"$ref": "#/$defs/stepDeclaration"}
+      },
+      "dependentRequired": {
+        "spacing_group_id": ["spacing_index", "inter_frame_item_step"],
+        "spacing_index": ["spacing_group_id", "inter_frame_item_step"],
+        "inter_frame_item_step": ["spacing_group_id", "spacing_index"]
+      },
+      "additionalProperties": false
+    },
+    "geometry": {
+      "type": "object",
+      "required": ["frame_bbox_pt", "safe_width_pt", "font_size_pt", "margins_pt", "max_lines"],
+      "properties": {
+        "frame_bbox_pt": {"$ref": "#/$defs/bbox"},
+        "frame_width_pt": {"type": "number", "exclusiveMinimum": 0},
+        "safe_width_pt": {"type": "number", "exclusiveMinimum": 0},
+        "font_size_pt": {"type": "number", "exclusiveMinimum": 0},
+        "margins_pt": {"type": "array", "items": {"type": "number", "minimum": 0}, "minItems": 2, "maxItems": 2},
+        "max_lines": {"type": "integer", "minimum": 1},
+        "max_height_pt": {"type": ["number", "null"]}
+      }
+    },
+    "plan": {
+      "type": "object",
+      "required": ["line_hashes", "line_count", "widths_pt", "line_paragraph_indices", "line_height_pt"],
+      "properties": {
+        "line_hashes": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/hash"}},
+        "line_count": {"type": "integer", "minimum": 1},
+        "widths_pt": {"type": "array", "items": {"type": "number", "minimum": 0}},
+        "line_paragraph_indices": {"type": "array", "items": {"type": "integer", "minimum": 0}},
+        "line_height_pt": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+    "frame": {
+      "type": "object",
+      "required": ["status", "frame_id", "page", "geometry", "plan", "font", "role", "spacing"],
+      "properties": {
+        "status": {"const": "pass"},
+        "frame_id": {"type": "string", "minLength": 1},
+        "page": {"type": "integer", "minimum": 1},
+        "role": {"enum": ["body", "bullet-list"]},
+        "geometry": {"$ref": "#/$defs/geometry"},
+        "plan": {"$ref": "#/$defs/plan"},
+        "font": {"$ref": "#/$defs/font"},
+        "spacing": {"$ref": "#/$defs/spacing"},
+        "universal_text": {"type": "object"}
+      },
+      "not": {"anyOf": [{"required": ["text"]}, {"required": ["explicit_lines"]}, {"required": ["explicit_text"]}]}
+    },
+    "spacingCheck": {
+      "type": "object",
+      "required": ["kind", "requested_pt", "applied_pt", "effective_pt", "tolerance_pt", "measurement_basis", "sample_count", "spacing_pass"],
+      "properties": {
+        "kind": {"enum": ["intra_frame_line_step", "inter_frame_item_step"]},
+        "requested_pt": {"type": "number", "minimum": 12},
+        "applied_pt": {"type": "number", "minimum": 12},
+        "effective_pt": {"type": "number", "exclusiveMinimum": 0},
+        "tolerance_pt": {"type": "number", "exclusiveMinimum": 0},
+        "measurement_basis": {"enum": ["pdf_glyph_origin", "pdf_baseline", "planned_single_line"]},
+        "sample_count": {"type": "integer", "minimum": 0},
+        "spacing_pass": {"type": "boolean"}
+      }
+    },
+    "rendered": {
+      "type": "object",
+      "required": ["schema_version", "pdf_sha256", "status", "reason_codes", "frames", "spacing_pass"],
+      "properties": {
+        "schema_version": {"const": "docs-html-pdf-rendered-boundaries-1"},
+        "pdf_sha256": {"$ref": "#/$defs/hash"},
+        "status": {"enum": ["pass", "block"]},
+        "reason_codes": {"type": "array", "items": {"type": "string"}},
+        "spacing_pass": {"type": "boolean"},
+        "frames": {"type": "array", "items": {"type": "object"}}
+      }
+    }
+  }
+}

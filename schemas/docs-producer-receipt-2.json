@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/docs-producer-receipt-2.json",
+  "title": "Portable docs producer receipt",
+  "type": "object",
+  "required": ["schema_version", "status", "source", "style_preset", "ruleset", "quality", "renderer", "provider", "evidence_boundary"],
+  "properties": {
+    "schema_version": {"const": "docs-producer-receipt-2"},
+    "status": {"enum": ["pass", "block"]},
+    "source": {"type": "object", "required": ["sha256", "size_bytes", "format"]},
+    "style_preset": {"type": "object", "required": ["id", "version", "sha256"]},
+    "ruleset": {"type": "object", "required": ["id", "version", "sha256", "rule_ids"]},
+    "quality": {"type": "object", "required": ["status", "authoritative", "checker_sha256", "core_sha256"]},
+    "renderer": {"type": "object", "required": ["status", "name", "contract_version"]},
+    "provider": {"type": "object", "required": ["called", "authoritative", "image_transport"]},
+    "evidence_boundary": {"type": "object", "required": ["schema_version", "source_sha256", "ruleset_id", "ruleset_sha256", "style_preset_id", "style_preset_sha256", "image_transport"]}
+  },
+  "additionalProperties": true
+}

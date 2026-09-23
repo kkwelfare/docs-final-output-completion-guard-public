@@ -1,0 +1,16 @@
+{
+  "schema_version": "docs-ruleset-1",
+  "ruleset_id": "docs-quality-ruleset-v3",
+  "version": 1,
+  "rule_ids": [
+    "LOCAL-CANONICAL-FILTER-01",
+    "FORMAT-STRUCTURE-01",
+    "SAFE-WRAP-EXPLICIT-BREAK-01",
+    "RENDERER-READBACK-01",
+    "EVIDENCE-TYPED-BODY-FREE-01",
+    "PROVIDER-ADVISORY-ONLY-01",
+    "IMAGE-TRANSPORT-FORBIDDEN-01"
+  ],
+  "authority": "bundled deterministic local checker and declared quality rules",
+  "provider_override": "never"
+}

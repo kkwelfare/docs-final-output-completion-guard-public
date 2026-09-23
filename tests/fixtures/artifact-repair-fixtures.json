@@ -1,0 +1,17 @@
+{
+  "schema_version": "docs-artifact-repair-fixtures-1",
+  "cases": [
+    {"id": "rendered-orphan-ratio-repair-pass", "expected": "pass"},
+    {"id": "unsupported-issue-block", "expected": "unrepairable"},
+    {"id": "review-only-block", "expected": "unrepairable"},
+    {"id": "missing-adapter-block", "expected": "unrepairable"},
+    {"id": "tampered-plan-block", "expected": "unrepairable"},
+    {"id": "stale-scan-block", "expected": "unrepairable"},
+    {"id": "cross-task-identity-block", "expected": "unrepairable"},
+    {"id": "max-attempt-bound-block", "expected": "non_convergent"},
+    {"id": "no-progress-same-hash-block", "expected": "non_convergent"},
+    {"id": "semantic-mutation-block", "expected": "unrepairable"},
+    {"id": "old-root-write-block", "expected": "unrepairable"},
+    {"id": "adapter-error-block", "expected": "unrepairable"}
+  ]
+}

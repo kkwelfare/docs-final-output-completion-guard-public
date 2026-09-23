@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/docs-host-adapter-manifest-1.json",
+  "title": "Docs host adapter manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version"],
+  "properties": {
+    "schema_version": {"const": "docs-host-adapter-manifest-1"},
+    "canonical_checker_root": {"type": ["string", "null"]},
+    "renderer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {"type": "string"},
+        "executable": {"type": ["string", "null"]},
+        "output_root": {"type": ["string", "null"]},
+        "network": {"const": "disabled"}
+      }
+    },
+    "font_discovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"roots": {"type": "array", "items": {"type": "string"}}}
+    },
+    "task_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"root": {"type": ["string", "null"]}}
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"root": {"type": ["string", "null"]}}
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"mode": {"enum": ["advisory-disabled", "advisory-opt-in"]}}
+    }
+  }
+}

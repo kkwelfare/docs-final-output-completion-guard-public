@@ -1,0 +1,41 @@
+{
+  "schema_version": "docs-quality-gate-acceptance-fixtures-1",
+  "passing_base": {
+    "manifest_schema": "docs-finalization-manifest-1",
+    "manifest_state": "accepted",
+    "manifest_artifact_fields": ["canonical_path", "sha256", "size_bytes", "media_type"],
+    "manifest_fields": ["schema_version", "state", "artifacts", "artifact_set_id"],
+    "pdf_measurement_basis": "pdf_points",
+    "review_schema": "docs-layout-visual-review-2",
+    "candidate_zero": {
+      "candidate_count": 0,
+      "required": false,
+      "vision_model_invoked": false,
+      "evidence": null,
+      "status": "pass"
+    },
+    "candidate_first_review": {
+      "index": 0,
+      "llm_invoked": false,
+      "vision_invoked": false
+    }
+  },
+  "cases": [
+    {"id": "hash_drift_after_scan_block", "mutation": "append one byte after manifest/scan binding", "expected_reason": "finalization manifest artifact hash/size/media-type drift"},
+    {"id": "wrong_target_receipt_block", "mutation": "validate A-bound manifest against B", "expected_reason": "finalization manifest artifact set mismatch"},
+    {"id": "corrupt_receipt_block", "mutation": "replace receiver JSON with malformed bytes", "expected_reason": "receiver receipt is unreadable or malformed"},
+    {"id": "self_review_block", "mutation": "set producer and reviewer task/run identity equal", "expected_rule": "AQ-LAYOUT-REVIEW-IDENTITY-01"},
+    {"id": "review_null_or_missing_block", "mutation": "remove, null, or mark review error while one candidate exists", "expected_rule": "AQ-LAYOUT-REVIEW-01"},
+    {"id": "unit_mismatch_block", "mutation": "replace pdf_points/minimum_gap_pt with render_pixels/minimum_gap_px", "expected_reason": "AQ-LAYOUT-01: geometry measurement_basis must be pdf_points"},
+    {"id": "cjk_wrap_missing_block", "mutation": "remove absolute wrap_plan_receipt from a strict passing layout contract", "expected_reason": "AQ-LAYOUT-01: strict PDF contract requires an absolute wrap_plan_receipt"},
+    {"id": "cjk_bad_break_block", "mutation": "make planned line hash differ from delivered PDF line hash", "expected_rule": "planned_break_parity"},
+    {"id": "dead_space_profile_block", "mutation": "place final content above declared bottom blank threshold", "expected_rule": "dead_space_bottom_blank"},
+    {"id": "receiver_copy_hash_drift_block", "mutation": "change receiver copy after receipt binding", "expected_reason": "receiver-copy-hash-drift"},
+    {"id": "normal_pdf_pass", "mutation": null, "expected_status": "pass"},
+    {"id": "legacy_non_docs_pass", "mutation": null, "expected_status": "pass"}
+  ],
+  "existing_regression_bindings": {
+    "candidate_zero_no_llm_or_vision": "tests/test_layout_typography.py::test_candidate_zero_skips_review_path_and_records_no_vision_invocation",
+    "safe_wrap_bad_breaks": "tests/fixtures/safe-wrap-fixtures.json"
+  }
+}

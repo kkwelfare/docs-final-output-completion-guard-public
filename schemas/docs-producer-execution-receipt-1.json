@@ -1,0 +1,1146 @@
+{
+  "$defs": {
+    "artifact": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "path": {
+          "pattern": "^/",
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "size_bytes",
+        "media_type"
+      ],
+      "type": "object"
+    },
+    "color_frames": {
+      "additionalProperties": false,
+      "properties": {
+        "frames": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "frame_id": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "policy": {
+                "$ref": "#/$defs/color_state"
+              },
+              "role": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "selected_token_ids": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 2,
+                "type": "array",
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "frame_id",
+              "selected_token_ids",
+              "role",
+              "policy"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "docs-color-contrast-policy-frames-1"
+        },
+        "state": {
+          "enum": [
+            "applied",
+            "effective"
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "state",
+        "frames"
+      ],
+      "type": "object"
+    },
+    "color_state": {
+      "additionalProperties": false,
+      "properties": {
+        "colors": {
+          "additionalProperties": false,
+          "properties": {
+            "border_hex": {
+              "anyOf": [
+                {
+                  "pattern": "^#[0-9A-F]{6}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "foreground_hex": {
+              "pattern": "^#[0-9A-F]{6}$",
+              "type": "string"
+            },
+            "surface_hex": {
+              "pattern": "^#[0-9A-F]{6}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "foreground_hex",
+            "surface_hex",
+            "border_hex"
+          ],
+          "type": "object"
+        },
+        "declared_contrast_ratio": {
+          "type": "number"
+        },
+        "foreground_mode": {
+          "enum": [
+            "body-near-black",
+            "contrast-select"
+          ]
+        },
+        "min_contrast_ratio": {
+          "type": "number"
+        },
+        "palette": {
+          "minProperties": 1,
+          "type": "object"
+        },
+        "preferred_contrast_ratio": {
+          "type": "number"
+        },
+        "role": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "schema_version": {
+          "enum": [
+            "docs-color-contrast-policy-applied-1",
+            "docs-color-contrast-policy-effective-1"
+          ]
+        },
+        "selected_token_ids": {
+          "additionalProperties": false,
+          "properties": {
+            "border": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "foreground": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "surface": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "foreground",
+            "surface",
+            "border"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "schema_version",
+        "role",
+        "palette",
+        "foreground_mode",
+        "selected_token_ids",
+        "colors",
+        "declared_contrast_ratio",
+        "min_contrast_ratio",
+        "preferred_contrast_ratio"
+      ],
+      "type": "object"
+    },
+    "handle": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "pattern": "^/",
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "size_bytes"
+      ],
+      "type": "object"
+    },
+    "hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "identity": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_set_id": {
+          "$ref": "#/$defs/hash"
+        },
+        "contract_id": {
+          "$ref": "#/$defs/hash"
+        },
+        "policy_hash": {
+          "$ref": "#/$defs/hash"
+        },
+        "producer_run_id": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "contract_id",
+        "policy_hash",
+        "producer_run_id",
+        "artifact_set_id"
+      ],
+      "type": "object"
+    },
+    "semantic_surface_applied_frames": {
+      "additionalProperties": false,
+      "properties": {
+        "frames": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "frame_id": {
+                "minLength": 1,
+                "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+                "type": "string"
+              },
+              "policy": {
+                "$ref": "#/$defs/semantic_surface_applied_state"
+              },
+              "region_id": {
+                "minLength": 1,
+                "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+                "type": "string"
+              },
+              "selected_token_ids": {
+                "items": {
+                  "minLength": 1,
+                  "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+                  "type": "string"
+                },
+                "maxItems": 1,
+                "minItems": 1,
+                "type": "array",
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "frame_id",
+              "selected_token_ids",
+              "region_id",
+              "policy"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "docs-semantic-surface-policy-frames-1"
+        },
+        "state": {
+          "const": "applied"
+        }
+      },
+      "required": [
+        "schema_version",
+        "state",
+        "frames"
+      ],
+      "type": "object"
+    },
+    "semantic_surface_applied_state": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "else": {
+            "required": [
+              "semantic_group_id"
+            ]
+          },
+          "if": {
+            "properties": {
+              "topology": {
+                "const": "none"
+              }
+            },
+            "required": [
+              "topology"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "semantic_group_id"
+              ]
+            }
+          }
+        },
+        {
+          "oneOf": [
+            {
+              "required": [
+                "sequence_scope_id",
+                "sequence_index"
+              ]
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "sequence_scope_id"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "sequence_index"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "properties": {
+        "caller_role": {
+          "minLength": 1,
+          "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+          "type": "string"
+        },
+        "container_scope": {
+          "enum": [
+            "none",
+            "group",
+            "semantic-unit"
+          ]
+        },
+        "elevation_class": {
+          "enum": [
+            "none",
+            "low",
+            "standard"
+          ]
+        },
+        "intent_class": {
+          "enum": [
+            "ordinary",
+            "compare",
+            "define",
+            "enumerate",
+            "sequence",
+            "contrast",
+            "memorize"
+          ]
+        },
+        "page_index": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "region_id": {
+          "minLength": 1,
+          "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "docs-semantic-surface-policy-applied-1"
+        },
+        "selected_token_id": {
+          "minLength": 1,
+          "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+          "type": "string"
+        },
+        "semantic_group_id": {
+          "minLength": 1,
+          "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+          "type": "string"
+        },
+        "sequence_index": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sequence_scope_id": {
+          "minLength": 1,
+          "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+          "type": "string"
+        },
+        "surface_tier": {
+          "enum": [
+            "flat",
+            "light-group",
+            "card",
+            "emphasis"
+          ]
+        },
+        "topology": {
+          "enum": [
+            "none",
+            "shared-group",
+            "paired",
+            "per-item",
+            "band"
+          ]
+        },
+        "visual_weight": {
+          "enum": [
+            "none",
+            "subtle",
+            "standard",
+            "strong"
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "region_id",
+        "caller_role",
+        "intent_class",
+        "page_index",
+        "selected_token_id",
+        "surface_tier",
+        "topology",
+        "container_scope",
+        "visual_weight",
+        "elevation_class"
+      ],
+      "type": "object"
+    },
+    "semantic_surface_effective_frames": {
+      "additionalProperties": false,
+      "properties": {
+        "frames": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "frame_id": {
+                "minLength": 1,
+                "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+                "type": "string"
+              },
+              "policy": {
+                "$ref": "#/$defs/semantic_surface_effective_state"
+              },
+              "region_id": {
+                "minLength": 1,
+                "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+                "type": "string"
+              },
+              "selected_token_ids": {
+                "items": {
+                  "minLength": 1,
+                  "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+                  "type": "string"
+                },
+                "maxItems": 1,
+                "minItems": 1,
+                "type": "array",
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "frame_id",
+              "selected_token_ids",
+              "region_id",
+              "policy"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "docs-semantic-surface-policy-frames-1"
+        },
+        "state": {
+          "const": "effective"
+        }
+      },
+      "required": [
+        "schema_version",
+        "state",
+        "frames"
+      ],
+      "type": "object"
+    },
+    "semantic_surface_effective_state": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "else": {
+            "required": [
+              "semantic_group_id"
+            ]
+          },
+          "if": {
+            "properties": {
+              "topology": {
+                "const": "none"
+              }
+            },
+            "required": [
+              "topology"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "semantic_group_id"
+              ]
+            }
+          }
+        },
+        {
+          "oneOf": [
+            {
+              "required": [
+                "sequence_scope_id",
+                "sequence_index"
+              ]
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "sequence_scope_id"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "sequence_index"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "properties": {
+        "caller_role": {
+          "minLength": 1,
+          "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+          "type": "string"
+        },
+        "container_scope": {
+          "enum": [
+            "none",
+            "group",
+            "semantic-unit"
+          ]
+        },
+        "elevation_class": {
+          "enum": [
+            "none",
+            "low",
+            "standard"
+          ]
+        },
+        "intent_class": {
+          "enum": [
+            "ordinary",
+            "compare",
+            "define",
+            "enumerate",
+            "sequence",
+            "contrast",
+            "memorize"
+          ]
+        },
+        "page_index": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "region_id": {
+          "minLength": 1,
+          "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "docs-semantic-surface-policy-effective-1"
+        },
+        "selected_token_id": {
+          "minLength": 1,
+          "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+          "type": "string"
+        },
+        "semantic_group_id": {
+          "minLength": 1,
+          "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+          "type": "string"
+        },
+        "sequence_index": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sequence_scope_id": {
+          "minLength": 1,
+          "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+          "type": "string"
+        },
+        "surface_tier": {
+          "enum": [
+            "flat",
+            "light-group",
+            "card",
+            "emphasis"
+          ]
+        },
+        "topology": {
+          "enum": [
+            "none",
+            "shared-group",
+            "paired",
+            "per-item",
+            "band"
+          ]
+        },
+        "visual_weight": {
+          "enum": [
+            "none",
+            "subtle",
+            "standard",
+            "strong"
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "region_id",
+        "caller_role",
+        "intent_class",
+        "page_index",
+        "selected_token_id",
+        "surface_tier",
+        "topology",
+        "container_scope",
+        "visual_weight",
+        "elevation_class"
+      ],
+      "type": "object"
+    },
+    "semantic_surface_policy": {
+      "additionalProperties": false,
+      "properties": {
+        "regions": {
+          "items": {
+            "$ref": "#/$defs/surface_region"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "schema_version": {
+          "const": "docs-semantic-surface-policy-1"
+        },
+        "sequence_policy": {
+          "$ref": "#/$defs/sequence_policy"
+        },
+        "tokens": {
+          "items": {
+            "$ref": "#/$defs/surface_token"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "schema_version",
+        "tokens",
+        "regions"
+      ],
+      "type": "object"
+    },
+    "sequence_policy": {
+      "additionalProperties": false,
+      "properties": {
+        "max_consecutive_pages": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "mode": {
+          "const": "review"
+        },
+        "model_call_if_zero_candidates": {
+          "const": false
+        },
+        "prominent_tiers": {
+          "items": {
+            "enum": [
+              "flat",
+              "light-group",
+              "card",
+              "emphasis"
+            ]
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "mode",
+        "prominent_tiers",
+        "max_consecutive_pages",
+        "model_call_if_zero_candidates"
+      ],
+      "type": "object"
+    },
+    "surface_region": {
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "sequence_scope_id",
+            "sequence_index"
+          ]
+        },
+        {
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "sequence_scope_id"
+                ]
+              },
+              {
+                "required": [
+                  "sequence_index"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "caller_role": {
+          "minLength": 1,
+          "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+          "type": "string"
+        },
+        "intent_class": {
+          "enum": [
+            "ordinary",
+            "compare",
+            "define",
+            "enumerate",
+            "sequence",
+            "contrast",
+            "memorize"
+          ]
+        },
+        "page_index": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "region_id": {
+          "minLength": 1,
+          "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+          "type": "string"
+        },
+        "selected_token_id": {
+          "minLength": 1,
+          "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+          "type": "string"
+        },
+        "semantic_group_id": {
+          "minLength": 1,
+          "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+          "type": "string"
+        },
+        "sequence_index": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sequence_scope_id": {
+          "minLength": 1,
+          "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "region_id",
+        "caller_role",
+        "intent_class",
+        "page_index",
+        "selected_token_id"
+      ],
+      "type": "object"
+    },
+    "surface_token": {
+      "additionalProperties": false,
+      "not": {
+        "allOf": [
+          {
+            "properties": {
+              "surface_tier": {
+                "const": "flat"
+              }
+            },
+            "required": [
+              "surface_tier"
+            ]
+          },
+          {
+            "properties": {
+              "topology": {
+                "const": "per-item"
+              }
+            },
+            "required": [
+              "topology"
+            ]
+          }
+        ]
+      },
+      "properties": {
+        "container_scope": {
+          "enum": [
+            "none",
+            "group",
+            "semantic-unit"
+          ]
+        },
+        "elevation_class": {
+          "enum": [
+            "none",
+            "low",
+            "standard"
+          ]
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+          "type": "string"
+        },
+        "surface_tier": {
+          "enum": [
+            "flat",
+            "light-group",
+            "card",
+            "emphasis"
+          ]
+        },
+        "topology": {
+          "enum": [
+            "none",
+            "shared-group",
+            "paired",
+            "per-item",
+            "band"
+          ]
+        },
+        "visual_weight": {
+          "enum": [
+            "none",
+            "subtle",
+            "standard",
+            "strong"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "surface_tier",
+        "topology",
+        "container_scope",
+        "visual_weight",
+        "elevation_class"
+      ],
+      "type": "object"
+    },
+    "vertical_alignment_policy": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "docs-cell-vertical-alignment-policy-1"
+        },
+        "tokens": {
+          "items": {
+            "$ref": "#/$defs/vertical_alignment_token"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_version",
+        "tokens"
+      ],
+      "type": "object"
+    },
+    "vertical_alignment_state": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "enum": [
+            "docs-cell-vertical-alignment-policy-applied-1",
+            "docs-cell-vertical-alignment-policy-effective-1"
+          ]
+        },
+        "target_role": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "tokens": {
+          "items": {
+            "$ref": "#/$defs/vertical_alignment_token"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_version",
+        "target_role",
+        "tokens"
+      ],
+      "type": "object"
+    },
+    "vertical_alignment_token": {
+      "additionalProperties": false,
+      "properties": {
+        "center_tolerance_pt": {
+          "minimum": 0,
+          "type": "number"
+        },
+        "id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "target_role": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "vertical_align": {
+          "const": "center"
+        }
+      },
+      "required": [
+        "id",
+        "target_role",
+        "vertical_align",
+        "center_tolerance_pt"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "applied": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/semantic_surface_applied_frames"
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/color_frames"
+            },
+            {
+              "properties": {
+                "state": {
+                  "const": "applied"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/vertical_alignment_state"
+            },
+            {
+              "properties": {
+                "schema_version": {
+                  "const": "docs-cell-vertical-alignment-policy-applied-1"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "not": {
+            "properties": {
+              "schema_version": {
+                "enum": [
+                  "docs-cell-vertical-alignment-policy-applied-1",
+                  "docs-semantic-surface-policy-applied-1",
+                  "docs-semantic-surface-policy-effective-1",
+                  "docs-semantic-surface-policy-frames-1"
+                ]
+              }
+            },
+            "required": [
+              "schema_version"
+            ]
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "artifacts": {
+      "items": {
+        "$ref": "#/$defs/artifact"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "contract": {
+      "$ref": "#/$defs/handle"
+    },
+    "effective": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/semantic_surface_effective_frames"
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/color_frames"
+            },
+            {
+              "properties": {
+                "state": {
+                  "const": "effective"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/vertical_alignment_state"
+            },
+            {
+              "properties": {
+                "schema_version": {
+                  "const": "docs-cell-vertical-alignment-policy-effective-1"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "not": {
+            "properties": {
+              "schema_version": {
+                "enum": [
+                  "docs-cell-vertical-alignment-policy-effective-1",
+                  "docs-semantic-surface-policy-applied-1",
+                  "docs-semantic-surface-policy-effective-1",
+                  "docs-semantic-surface-policy-frames-1"
+                ]
+              }
+            },
+            "required": [
+              "schema_version"
+            ]
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "execution_identity": {
+      "$ref": "#/$defs/identity"
+    },
+    "frame_count": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "plan_log": {
+      "$ref": "#/$defs/handle"
+    },
+    "semantic_surface_effect_evidence": {
+      "$ref": "#/$defs/handle"
+    },
+    "requested": {
+      "properties": {
+        "color_policy": {
+          "properties": {
+            "schema_version": {
+              "const": "docs-color-contrast-policy-1"
+            }
+          },
+          "required": [
+            "schema_version"
+          ],
+          "type": "object"
+        },
+        "semantic_surface_policy": {
+          "$ref": "#/$defs/semantic_surface_policy"
+        },
+        "vertical_alignment_policy": {
+          "$ref": "#/$defs/vertical_alignment_policy"
+        }
+      },
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "docs-producer-execution-receipt-1"
+    },
+    "status": {
+      "const": "pass"
+    }
+  },
+  "required": [
+    "schema_version",
+    "status",
+    "execution_identity",
+    "contract",
+    "plan_log",
+    "requested",
+    "applied",
+    "effective",
+    "artifacts"
+  ],
+  "type": "object"
+}

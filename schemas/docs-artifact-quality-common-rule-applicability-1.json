@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "docs-artifact-quality-common-rule-applicability-1.json",
+  "$defs": {
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": {"type": "string", "minLength": 1},
+        "id": {"type": "string", "minLength": 1},
+        "source": {"type": "string", "pattern": "^/"}
+      }
+    },
+    "declaration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["applicability", "reason_code", "reason", "basis", "decision_provenance"],
+      "properties": {
+        "applicability": {"enum": ["applicable", "not_applicable"]},
+        "reason_code": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$"},
+        "reason": {"type": "string", "minLength": 1},
+        "basis": {"type": "string", "minLength": 1},
+        "decision_provenance": {"$ref": "#/$defs/provenance"}
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "rules"],
+  "properties": {
+    "schema_version": {"const": "docs-artifact-quality-common-rule-applicability-1"},
+    "rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "AQ-CHANGE-01", "AQ-IDENTITY-01", "AQ-ASSET-01", "AQ-AUTHORITY-01",
+        "AQ-BOUNDARY-01", "AQ-RELATION-01", "AQ-SCOPE-01", "AQ-VISIBLE-01",
+        "AQ-FIXTURE-01", "AQ-LOCAL-GLOBAL-01"
+      ],
+      "properties": {
+        "AQ-CHANGE-01": {"$ref": "#/$defs/declaration"},
+        "AQ-IDENTITY-01": {"$ref": "#/$defs/declaration"},
+        "AQ-ASSET-01": {"$ref": "#/$defs/declaration"},
+        "AQ-AUTHORITY-01": {"$ref": "#/$defs/declaration"},
+        "AQ-BOUNDARY-01": {"$ref": "#/$defs/declaration"},
+        "AQ-RELATION-01": {"$ref": "#/$defs/declaration"},
+        "AQ-SCOPE-01": {"$ref": "#/$defs/declaration"},
+        "AQ-VISIBLE-01": {"$ref": "#/$defs/declaration"},
+        "AQ-FIXTURE-01": {"$ref": "#/$defs/declaration"},
+        "AQ-LOCAL-GLOBAL-01": {"$ref": "#/$defs/declaration"}
+      }
+    }
+  }
+}

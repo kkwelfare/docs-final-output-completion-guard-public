@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/docs-style-preset-1.json",
+  "title": "Docs style preset",
+  "type": "object",
+  "required": ["schema_version", "preset_id", "version", "font_policy", "layout", "renderer_policy", "ruleset_id"],
+  "properties": {
+    "schema_version": {"const": "docs-style-preset-1"},
+    "preset_id": {"type": "string", "pattern": "^docs-style-[a-z0-9-]+-v[0-9]+$"},
+    "version": {"type": "integer", "minimum": 1},
+    "font_policy": {"type": "object", "required": ["source", "fallback", "discovery"]},
+    "layout": {"type": "object", "required": ["max_lines", "safe_width_ratio", "implicit_wrap"]},
+    "renderer_policy": {"type": "object", "required": ["network", "image_transport"]},
+    "ruleset_id": {"type": "string"}
+  },
+  "additionalProperties": true
+}

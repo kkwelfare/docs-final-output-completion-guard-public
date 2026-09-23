@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "docs-relative-anchor-gap-contract-1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "policy", "policy_hash", "contract_id"],
+  "properties": {
+    "schema_version": {"const": "docs-relative-anchor-gap-contract-1"},
+    "policy": {"$ref": "#/$defs/policy"},
+    "policy_hash": {"$ref": "#/$defs/hash"},
+    "contract_id": {"$ref": "#/$defs/hash"}
+  },
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "point": {"type": "array", "prefixItems": [{"type": "number"}, {"type": "number"}], "minItems": 2, "maxItems": 2},
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "axis", "shared_container", "containment_tolerance_pt", "measurement_model", "annotation_id", "source_annotation_map_sha256", "anchor", "reference", "direction_vector", "target_gap_ratio", "tolerance", "no_contact", "contact_tolerance_pt", "facing"],
+      "properties": {
+        "mode": {"const": "separate"},
+        "axis": {"const": "horizontal"},
+        "shared_container": {"enum": ["required", "allowed", "forbidden"]},
+        "containment_tolerance_pt": {"type": "number", "minimum": 0},
+        "measurement_model": {"const": "point_to_visible_envelope"},
+        "annotation_id": {"type": "string", "minLength": 1, "pattern": "\\S"},
+        "source_annotation_map_sha256": {"$ref": "#/$defs/hash"},
+        "anchor": {"type": "object", "additionalProperties": false, "required": ["member_id", "point_kind"], "properties": {"member_id": {"type": "string", "minLength": 1, "pattern": "\\S"}, "point_kind": {"const": "tail_tip"}}},
+        "reference": {"type": "object", "additionalProperties": false, "required": ["member_id", "envelope_kind", "dimension"], "properties": {"member_id": {"type": "string", "minLength": 1, "pattern": "\\S"}, "envelope_kind": {"const": "visible_bbox"}, "dimension": {"const": "horizontal_width"}}},
+        "direction_vector": {"$ref": "#/$defs/point"},
+        "target_gap_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+        "tolerance": {"type": "number", "minimum": 0, "maximum": 1},
+        "no_contact": {"type": "boolean"},
+        "contact_tolerance_pt": {"type": "number", "minimum": 0},
+        "facing": {"enum": ["toward_anchor", "away_from_anchor", "neutral"]}
+      }
+    }
+  }
+}

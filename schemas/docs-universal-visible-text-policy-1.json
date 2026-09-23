@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "docs-universal-visible-text-policy-1.json",
+  "title": "Universal visible text policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "policy_id",
+    "default_visibility",
+    "source_supported_only",
+    "one_sentence_one_meaning",
+    "suppressed_meta_kinds",
+    "preserved_constraint_reasons",
+    "body_list_minimum_line_spacing_twips"
+  ],
+  "properties": {
+    "schema_version": {"const": "docs-universal-visible-text-policy-1"},
+    "policy_id": {"const": "universal-explicit-v1"},
+    "default_visibility": {"const": "visible"},
+    "source_supported_only": {"const": true},
+    "one_sentence_one_meaning": {"const": true},
+    "suppressed_meta_kinds": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {"enum": ["scope-only", "boundary-only", "permission-only", "authority-only", "uncertainty-meta"]}
+    },
+    "preserved_constraint_reasons": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {"enum": ["safety", "legal", "contract"]}
+    },
+    "body_list_minimum_line_spacing_twips": {"const": 240}
+  }
+}

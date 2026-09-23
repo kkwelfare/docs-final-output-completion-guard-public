@@ -1,0 +1,1205 @@
+{
+  "$defs": {
+    "artifact": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "path": {
+          "pattern": "^/",
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "size_bytes",
+        "media_type"
+      ],
+      "type": "object"
+    },
+    "color_policy": {
+      "additionalProperties": false,
+      "properties": {
+        "palette": {
+          "additionalProperties": false,
+          "anyOf": [
+            {
+              "required": [
+                "palette_seed"
+              ]
+            },
+            {
+              "required": [
+                "selection_metadata"
+              ]
+            }
+          ],
+          "properties": {
+            "palette_id": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "palette_seed": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "selection_metadata": {
+              "minProperties": 1,
+              "type": "object"
+            }
+          },
+          "required": [
+            "palette_id"
+          ],
+          "type": "object"
+        },
+        "roles": {
+          "items": {
+            "$ref": "#/$defs/color_role"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "docs-color-contrast-policy-1"
+        },
+        "tokens": {
+          "items": {
+            "$ref": "#/$defs/color_token"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_version",
+        "palette",
+        "tokens",
+        "roles"
+      ],
+      "type": "object"
+    },
+    "color_role": {
+      "additionalProperties": false,
+      "properties": {
+        "border_token_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "foreground_mode": {
+          "enum": [
+            "body-near-black",
+            "contrast-select"
+          ]
+        },
+        "foreground_token_ids": {
+          "$ref": "#/$defs/ids"
+        },
+        "min_contrast_ratio": {
+          "exclusiveMinimum": 1,
+          "maximum": 21,
+          "type": "number"
+        },
+        "preferred_contrast_ratio": {
+          "exclusiveMinimum": 1,
+          "maximum": 21,
+          "type": "number"
+        },
+        "render_samples": {
+          "items": {
+            "$ref": "#/$defs/color_sample"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "role": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "surface_token_id": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "foreground_mode",
+        "foreground_token_ids",
+        "surface_token_id",
+        "border_token_id",
+        "min_contrast_ratio",
+        "preferred_contrast_ratio",
+        "render_samples"
+      ],
+      "type": "object"
+    },
+    "color_sample": {
+      "additionalProperties": false,
+      "properties": {
+        "foreground_xy": {
+          "items": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "render_index": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "sample_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "surface_xy": {
+          "items": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "sample_id",
+        "render_index",
+        "foreground_xy",
+        "surface_xy"
+      ],
+      "type": "object"
+    },
+    "color_token": {
+      "additionalProperties": false,
+      "properties": {
+        "hex": {
+          "pattern": "^#[0-9A-F]{6}$",
+          "type": "string"
+        },
+        "id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "foreground",
+            "surface",
+            "border"
+          ]
+        },
+        "rgb": {
+          "items": {
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "hex",
+        "rgb"
+      ],
+      "type": "object"
+    },
+    "handle": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "pattern": "^/",
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "size_bytes"
+      ],
+      "type": "object"
+    },
+    "hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "ids": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "policy": {
+      "properties": {
+        "color_policy": {
+          "$ref": "#/$defs/color_policy"
+        },
+        "readability_policy": {
+          "$ref": "#/$defs/readability_policy"
+        },
+        "semantic_component_policy": {
+          "$ref": "#/$defs/semantic_component_policy"
+        },
+        "semantic_style_policy": {
+          "$ref": "#/$defs/semantic_policy"
+        },
+        "semantic_surface_policy": {
+          "$ref": "#/$defs/semantic_surface_policy"
+        },
+        "universal_visible_text_policy": {
+          "$ref": "#/$defs/universal_visible_text_policy"
+        },
+        "vertical_alignment_policy": {
+          "$ref": "#/$defs/vertical_alignment_policy"
+        }
+      },
+      "type": "object"
+    },
+    "readability_policy": {
+      "additionalProperties": false,
+      "properties": {
+        "print_variants": {
+          "additionalProperties": false,
+          "properties": {
+            "grayscale": {
+              "const": true
+            },
+            "scales": {
+              "contains": {
+                "const": 1.0
+              },
+              "items": {
+                "maximum": 1.0,
+                "minimum": 0.1,
+                "type": "number"
+              },
+              "minItems": 1,
+              "type": "array",
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "grayscale",
+            "scales"
+          ],
+          "type": "object"
+        },
+        "regions": {
+          "items": {
+            "$ref": "#/$defs/readability_region"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "required_evidence": {
+          "type": "boolean"
+        },
+        "review_thresholds": {
+          "additionalProperties": false,
+          "properties": {
+            "dominant_visual_max_ratio": {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            "glow_competition_max_ratio": {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            }
+          },
+          "required": [
+            "dominant_visual_max_ratio",
+            "glow_competition_max_ratio"
+          ],
+          "type": "object"
+        },
+        "rollout_mode": {
+          "enum": [
+            "shadow",
+            "enforced"
+          ]
+        },
+        "schema_version": {
+          "const": "docs-readability-policy-1"
+        }
+      },
+      "required": [
+        "schema_version",
+        "rollout_mode",
+        "required_evidence",
+        "regions",
+        "print_variants",
+        "review_thresholds"
+      ],
+      "type": "object"
+    },
+    "readability_region": {
+      "additionalProperties": false,
+      "properties": {
+        "bbox_norm": {
+          "items": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        },
+        "foreground_hex": {
+          "pattern": "^#[0-9A-F]{6}$",
+          "type": "string"
+        },
+        "foreground_tolerance": {
+          "maximum": 255,
+          "minimum": 0,
+          "type": "number"
+        },
+        "min_contrast_ratio": {
+          "maximum": 21,
+          "minimum": 1,
+          "type": "number"
+        },
+        "min_font_size_pt": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "region_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "render_index": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "role": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "region_id",
+        "role",
+        "render_index",
+        "bbox_norm",
+        "foreground_hex",
+        "foreground_tolerance",
+        "min_contrast_ratio",
+        "min_font_size_pt"
+      ],
+      "type": "object"
+    },
+    "semantic_component": {
+      "additionalProperties": false,
+      "properties": {
+        "caller_role": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "component_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/semantic_component_member"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "page_index": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "selected_token_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "semantic_group_id": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "component_id",
+        "caller_role",
+        "page_index",
+        "selected_token_id",
+        "semantic_group_id",
+        "members"
+      ],
+      "type": "object"
+    },
+    "semantic_component_member": {
+      "additionalProperties": false,
+      "properties": {
+        "member_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "container",
+            "heading",
+            "body",
+            "item",
+            "code",
+            "asset"
+          ]
+        }
+      },
+      "required": [
+        "member_id",
+        "role"
+      ],
+      "type": "object"
+    },
+    "semantic_component_policy": {
+      "additionalProperties": false,
+      "properties": {
+        "components": {
+          "items": {
+            "$ref": "#/$defs/semantic_component"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "relations": {
+          "items": {
+            "$ref": "#/$defs/semantic_component_relation"
+          },
+          "type": "array"
+        },
+        "boundary_no_contact_policy": {
+          "$ref": "#/$defs/semantic_component_boundary_no_contact_policy"
+        },
+        "schema_version": {
+          "const": "docs-semantic-component-policy-1"
+        },
+        "tokens": {
+          "items": {
+            "$ref": "#/$defs/semantic_component_token"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_version",
+        "tokens",
+        "components",
+        "relations"
+      ],
+      "type": "object"
+    },
+    "semantic_component_boundary_no_contact_policy": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {"const": "docs-semantic-component-boundary-no-contact-policy-1"},
+        "status": {"const": "declared"},
+        "surface_families": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["card", "group"]}},
+        "allowed_overlay_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "member_ownership": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["text_block_id", "component_id"],
+            "properties": {
+              "text_block_id": {"type": "string", "minLength": 1},
+              "component_id": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      },
+      "required": ["schema_version", "status", "surface_families", "allowed_overlay_ids"],
+      "type": "object"
+    },
+    "semantic_component_relation": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "placement": {
+                "const": "before"
+              }
+            },
+            "required": [
+              "placement"
+            ]
+          },
+          "then": {
+            "required": [
+              "override_reason"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "anchor": {
+          "const": "previous_block"
+        },
+        "boundary_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "from_member_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "divider",
+            "connector",
+            "grid"
+          ]
+        },
+        "override_reason": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "placement": {
+          "enum": [
+            "after",
+            "before"
+          ]
+        },
+        "relation_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "to_member_id": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "relation_id",
+        "kind",
+        "from_member_id",
+        "to_member_id"
+      ],
+      "type": "object"
+    },
+    "semantic_component_token": {
+      "additionalProperties": false,
+      "properties": {
+        "asset_backend": {
+          "enum": [
+            "none",
+            "native",
+            "svg"
+          ]
+        },
+        "connector_policy": {
+          "enum": [
+            "none",
+            "directed",
+            "undirected"
+          ]
+        },
+        "divider_anchor": {
+          "const": "previous_block"
+        },
+        "divider_placement": {
+          "const": "after"
+        },
+        "divider_policy": {
+          "enum": [
+            "none",
+            "explicit-between",
+            "grid-only"
+          ]
+        },
+        "family": {
+          "enum": [
+            "plain",
+            "group",
+            "card",
+            "flow",
+            "diagram",
+            "table",
+            "code",
+            "callout"
+          ]
+        },
+        "id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "topology": {
+          "enum": [
+            "none",
+            "stack",
+            "paired",
+            "sequence",
+            "hierarchy",
+            "grid",
+            "band"
+          ]
+        },
+        "wrapper_border": {
+          "enum": [
+            "none",
+            "explicit"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "family",
+        "topology",
+        "divider_policy",
+        "connector_policy",
+        "asset_backend",
+        "wrapper_border",
+        "divider_placement",
+        "divider_anchor"
+      ],
+      "type": "object"
+    },
+    "semantic_policy": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "docs-semantic-style-policy-1"
+        },
+        "tokens": {
+          "items": {
+            "$ref": "#/$defs/semantic_token"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_version",
+        "tokens"
+      ],
+      "type": "object"
+    },
+    "semantic_surface_metric_thresholds": {
+      "additionalProperties": false,
+      "properties": {
+        "max_bottom_blank_ratio": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "max_consecutive_prominent_pages": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "max_surface_area_ratio": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "min_vertical_occupancy": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "max_surface_area_ratio",
+        "min_vertical_occupancy",
+        "max_bottom_blank_ratio",
+        "max_consecutive_prominent_pages"
+      ],
+      "type": "object"
+    },
+    "semantic_surface_policy": {
+      "additionalProperties": false,
+      "properties": {
+        "metric_thresholds": {
+          "$ref": "#/$defs/semantic_surface_metric_thresholds"
+        },
+        "regions": {
+          "items": {
+            "$ref": "#/$defs/surface_region"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "schema_version": {
+          "const": "docs-semantic-surface-policy-1"
+        },
+        "sequence_policy": {
+          "$ref": "#/$defs/sequence_policy"
+        },
+        "tokens": {
+          "items": {
+            "$ref": "#/$defs/surface_token"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "schema_version",
+        "tokens",
+        "regions"
+      ],
+      "type": "object"
+    },
+    "semantic_token": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "paragraph-spacing",
+            "line-height"
+          ]
+        },
+        "relation": {
+          "enum": [
+            "before",
+            "after",
+            "within-lines"
+          ]
+        },
+        "role": {
+          "enum": [
+            "body",
+            "bullet-list",
+            "role-list",
+            "heading",
+            "label"
+          ]
+        },
+        "value": {
+          "additionalProperties": false,
+          "properties": {
+            "amount": {
+              "minimum": 0,
+              "type": "number"
+            },
+            "unit": {
+              "const": "pt"
+            }
+          },
+          "required": [
+            "unit",
+            "amount"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "role",
+        "relation",
+        "value"
+      ],
+      "type": "object"
+    },
+    "sequence_policy": {
+      "additionalProperties": false,
+      "properties": {
+        "max_consecutive_pages": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "mode": {
+          "const": "review"
+        },
+        "model_call_if_zero_candidates": {
+          "const": false
+        },
+        "prominent_tiers": {
+          "items": {
+            "enum": [
+              "flat",
+              "light-group",
+              "card",
+              "emphasis"
+            ]
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "mode",
+        "prominent_tiers",
+        "max_consecutive_pages",
+        "model_call_if_zero_candidates"
+      ],
+      "type": "object"
+    },
+    "surface_region": {
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "sequence_scope_id",
+            "sequence_index"
+          ]
+        },
+        {
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "sequence_scope_id"
+                ]
+              },
+              {
+                "required": [
+                  "sequence_index"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "caller_role": {
+          "minLength": 1,
+          "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+          "type": "string"
+        },
+        "intent_class": {
+          "enum": [
+            "ordinary",
+            "compare",
+            "define",
+            "enumerate",
+            "sequence",
+            "contrast",
+            "memorize"
+          ]
+        },
+        "page_index": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "region_id": {
+          "minLength": 1,
+          "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+          "type": "string"
+        },
+        "selected_token_id": {
+          "minLength": 1,
+          "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+          "type": "string"
+        },
+        "semantic_group_id": {
+          "minLength": 1,
+          "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+          "type": "string"
+        },
+        "sequence_index": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sequence_scope_id": {
+          "minLength": 1,
+          "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "region_id",
+        "caller_role",
+        "intent_class",
+        "page_index",
+        "selected_token_id"
+      ],
+      "type": "object"
+    },
+    "surface_token": {
+      "additionalProperties": false,
+      "not": {
+        "allOf": [
+          {
+            "properties": {
+              "surface_tier": {
+                "const": "flat"
+              }
+            },
+            "required": [
+              "surface_tier"
+            ]
+          },
+          {
+            "properties": {
+              "topology": {
+                "const": "per-item"
+              }
+            },
+            "required": [
+              "topology"
+            ]
+          }
+        ]
+      },
+      "properties": {
+        "container_scope": {
+          "enum": [
+            "none",
+            "group",
+            "semantic-unit"
+          ]
+        },
+        "elevation_class": {
+          "enum": [
+            "none",
+            "low",
+            "standard"
+          ]
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "^(?!\\s*$)\\S(?:.*\\S)?$",
+          "type": "string"
+        },
+        "surface_tier": {
+          "enum": [
+            "flat",
+            "light-group",
+            "card",
+            "emphasis"
+          ]
+        },
+        "topology": {
+          "enum": [
+            "none",
+            "shared-group",
+            "paired",
+            "per-item",
+            "band"
+          ]
+        },
+        "visual_weight": {
+          "enum": [
+            "none",
+            "subtle",
+            "standard",
+            "strong"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "surface_tier",
+        "topology",
+        "container_scope",
+        "visual_weight",
+        "elevation_class"
+      ],
+      "type": "object"
+    },
+    "universal_visible_text_policy": {
+      "additionalProperties": false,
+      "properties": {
+        "body_list_minimum_line_spacing_twips": {
+          "const": 240
+        },
+        "default_visibility": {
+          "const": "visible"
+        },
+        "one_sentence_one_meaning": {
+          "const": true
+        },
+        "policy_id": {
+          "const": "universal-explicit-v1"
+        },
+        "preserved_constraint_reasons": {
+          "items": {
+            "enum": [
+              "safety",
+              "legal",
+              "contract"
+            ]
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "schema_version": {
+          "const": "docs-universal-visible-text-policy-1"
+        },
+        "source_supported_only": {
+          "const": true
+        },
+        "suppressed_meta_kinds": {
+          "items": {
+            "enum": [
+              "scope-only",
+              "boundary-only",
+              "permission-only",
+              "authority-only",
+              "uncertainty-meta"
+            ]
+          },
+          "maxItems": 5,
+          "minItems": 5,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "schema_version",
+        "policy_id",
+        "default_visibility",
+        "source_supported_only",
+        "one_sentence_one_meaning",
+        "suppressed_meta_kinds",
+        "preserved_constraint_reasons",
+        "body_list_minimum_line_spacing_twips"
+      ],
+      "type": "object"
+    },
+    "vertical_alignment_policy": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "docs-cell-vertical-alignment-policy-1"
+        },
+        "tokens": {
+          "items": {
+            "$ref": "#/$defs/vertical_alignment_token"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_version",
+        "tokens"
+      ],
+      "type": "object"
+    },
+    "vertical_alignment_token": {
+      "additionalProperties": false,
+      "properties": {
+        "center_tolerance_pt": {
+          "minimum": 0,
+          "type": "number"
+        },
+        "id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "target_role": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "vertical_align": {
+          "const": "center"
+        }
+      },
+      "required": [
+        "id",
+        "target_role",
+        "vertical_align",
+        "center_tolerance_pt"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact_set_id": {
+      "$ref": "#/$defs/hash"
+    },
+    "artifacts": {
+      "items": {
+        "$ref": "#/$defs/artifact"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "contract_id": {
+      "$ref": "#/$defs/hash"
+    },
+    "declaration": {
+      "additionalProperties": false,
+      "properties": {
+        "acceptance_ids": {
+          "$ref": "#/$defs/ids"
+        },
+        "policy": {
+          "$ref": "#/$defs/policy"
+        },
+        "scope_ids": {
+          "$ref": "#/$defs/ids"
+        },
+        "source": {
+          "$ref": "#/$defs/handle"
+        }
+      },
+      "required": [
+        "policy",
+        "source",
+        "scope_ids",
+        "acceptance_ids"
+      ],
+      "type": "object"
+    },
+    "policy_hash": {
+      "$ref": "#/$defs/hash"
+    },
+    "producer_run_id": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "docs-production-execution-contract-1"
+    }
+  },
+  "required": [
+    "schema_version",
+    "contract_id",
+    "policy_hash",
+    "producer_run_id",
+    "declaration",
+    "artifacts",
+    "artifact_set_id"
+  ],
+  "type": "object"
+}

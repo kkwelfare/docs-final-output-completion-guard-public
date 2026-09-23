@@ -1,0 +1,11 @@
+{
+  "schema_version": "html-pdf-layout-relation-fixtures-1",
+  "positive": {
+    "centered": {"role": "badge", "single_line": true, "frame_bbox_pt": [36, 36, 160, 40], "padding_pt": [6, 8, 6, 8], "alignment_tolerance_pt": 2.5},
+    "separated": {"target_kind": "shape", "target_bbox_pt": [36, 104, 160, 40], "relation": "no_overlap", "min_gap_pt": 20}
+  },
+  "negative": {
+    "overlap": {"target_kind": "shape", "relation": "no_overlap", "min_gap_pt": 0, "overlap_pt": 1},
+    "top_aligned": {"css_from": "justify-content:center", "css_to": "justify-content:flex-start"}
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "docs-artifact-quality-common-evidence-1.json",
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "handle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/"},
+        "sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "artifactHandle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/"},
+        "sha256": {"anyOf": [{"$ref": "#/$defs/hash"}, {"const": ""}]}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": {"const": "checker"},
+        "id": {"type": "string", "minLength": 1}
+      }
+    },
+    "decisionProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": {"type": "string", "minLength": 1},
+        "id": {"type": "string", "minLength": 1},
+        "source": {"type": "string", "pattern": "^/"}
+      }
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rule_id", "applicability", "status", "disposition", "reason_code",
+        "reason", "basis", "decision_provenance"
+      ],
+      "properties": {
+        "rule_id": {"enum": ["AQ-CHANGE-01", "AQ-IDENTITY-01", "AQ-ASSET-01", "AQ-AUTHORITY-01", "AQ-BOUNDARY-01", "AQ-RELATION-01", "AQ-SCOPE-01", "AQ-VISIBLE-01", "AQ-FIXTURE-01", "AQ-LOCAL-GLOBAL-01"]},
+        "applicability": {"enum": ["applicable", "not_applicable"]},
+        "status": {"enum": ["pass", "fail", "NOT_APPLICABLE"]},
+        "disposition": {"enum": ["evidence_validated", "not_applicable", "missing_evidence", "invalid_evidence", "rule_failed", "missing_applicability", "invalid_applicability"]},
+        "reason_code": {"type": ["string", "null"]},
+        "reason": {"type": ["string", "null"]},
+        "basis": {"type": ["string", "null"]},
+        "decision_provenance": {"anyOf": [{"$ref": "#/$defs/decisionProvenance"}, {"type": "null"}]},
+        "evidence": {"$ref": "#/$defs/handle"}
+      }
+    },
+    "executionIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checker", "contract_sha256", "artifact_sha256", "producer_run_id", "artifact_set_id"],
+      "properties": {
+        "checker": {"$ref": "#/$defs/handle"},
+        "contract_sha256": {"$ref": "#/$defs/hash"},
+        "artifact_sha256": {"anyOf": [{"$ref": "#/$defs/hash"}, {"const": ""}]},
+        "producer_run_id": {"type": ["integer", "null"], "minimum": 0},
+        "artifact_set_id": {"anyOf": [{"$ref": "#/$defs/hash"}, {"type": "null"}]}
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "output_path", "contract", "contract_path", "contract_sha256",
+    "artifact", "artifact_path", "artifact_sha256", "execution_identity", "provenance", "rules"
+  ],
+  "properties": {
+    "schema_version": {"const": "docs-artifact-quality-common-evidence-1"},
+    "output_path": {"type": "string", "pattern": "^/"},
+    "contract": {"$ref": "#/$defs/handle"},
+    "contract_path": {"type": "string", "pattern": "^/"},
+    "contract_sha256": {"$ref": "#/$defs/hash"},
+    "artifact": {"$ref": "#/$defs/artifactHandle"},
+    "artifact_path": {"type": "string", "pattern": "^/"},
+    "artifact_sha256": {"anyOf": [{"$ref": "#/$defs/hash"}, {"const": ""}]},
+    "execution_identity": {"$ref": "#/$defs/executionIdentity"},
+    "provenance": {"$ref": "#/$defs/provenance"},
+    "rules": {"type": "array", "minItems": 10, "maxItems": 10, "items": {"$ref": "#/$defs/rule"}}
+  }
+}

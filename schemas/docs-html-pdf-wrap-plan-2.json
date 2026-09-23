@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "docs-html-pdf-wrap-plan-2.json",
+  "title": "Body-free frame-aware HTML to PDF wrap plan",
+  "type": "object",
+  "required": ["schema_version", "producer", "status", "source_sha256", "page_size_pt", "frames"],
+  "properties": {
+    "schema_version": {"const": "docs-html-pdf-wrap-plan-2"},
+    "producer": {"const": "html-pdf-canonical-2"},
+    "status": {"enum": ["planned", "pass", "block"]},
+    "source_sha256": {"$ref": "#/$defs/hash"},
+    "rendered_pdf_sha256": {"$ref": "#/$defs/hash"},
+    "page_size_pt": {
+      "type": "array", "prefixItems": [{"type": "number", "exclusiveMinimum": 0}, {"type": "number", "exclusiveMinimum": 0}],
+      "minItems": 2, "maxItems": 2
+    },
+    "reason_codes": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "frames": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/frame"}},
+    "rendered_boundary_check": {"$ref": "#/$defs/rendered"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "pass"}}},
+      "then": {"required": ["rendered_pdf_sha256", "rendered_boundary_check"]}
+    }
+  ],
+  "not": {"anyOf": [{"required": ["text"]}, {"required": ["explicit_lines"]}, {"required": ["explicit_text"]}]},
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "bbox": {
+      "type": "array", "prefixItems": [{"type": "number"}, {"type": "number"}, {"type": "number", "exclusiveMinimum": 0}, {"type": "number", "exclusiveMinimum": 0}],
+      "minItems": 4, "maxItems": 4
+    },
+    "font": {
+      "type": "object", "required": ["family", "status", "path", "sha256", "priority", "fallback_decision"],
+      "properties": {
+        "family": {"type": "string", "minLength": 1}, "status": {"const": "ud-installed"},
+        "path": {"type": "string", "pattern": "^/"}, "sha256": {"$ref": "#/$defs/hash"},
+        "priority": {"type": "string", "minLength": 1}, "fallback_decision": {"type": "string", "minLength": 1}
+      }
+    },
+    "frame": {
+      "type": "object", "required": ["status", "frame_id", "page", "geometry", "plan", "font", "role"],
+      "properties": {
+        "status": {"const": "pass"}, "frame_id": {"type": "string", "minLength": 1},
+        "page": {"type": "integer", "minimum": 1}, "role": {"type": "string", "minLength": 1},
+        "geometry": {
+          "type": "object", "required": ["frame_bbox_pt", "safe_width_pt", "font_size_pt", "margins_pt", "max_lines"],
+          "properties": {
+            "frame_bbox_pt": {"$ref": "#/$defs/bbox"}, "safe_width_pt": {"type": "number", "exclusiveMinimum": 0},
+            "font_size_pt": {"type": "number", "exclusiveMinimum": 0},
+            "margins_pt": {"type": "array", "items": {"type": "number", "minimum": 0}, "minItems": 2, "maxItems": 2},
+            "max_lines": {"type": "integer", "minimum": 1}
+          }
+        },
+        "plan": {
+          "type": "object", "required": ["line_hashes", "line_count", "widths_pt", "line_paragraph_indices"],
+          "properties": {
+            "line_hashes": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/hash"}},
+            "line_count": {"type": "integer", "minimum": 1}, "widths_pt": {"type": "array", "items": {"type": "number", "minimum": 0}},
+            "line_paragraph_indices": {"type": "array", "items": {"type": "integer", "minimum": 0}}
+          }
+        },
+        "font": {"$ref": "#/$defs/font"}
+      },
+      "not": {"anyOf": [{"required": ["text"]}, {"required": ["explicit_lines"]}, {"required": ["explicit_text"]}]}
+    },
+    "rendered": {
+      "type": "object", "required": ["schema_version", "pdf_sha256", "status", "reason_codes", "frames"],
+      "properties": {
+        "schema_version": {"const": "docs-html-pdf-rendered-boundaries-1"}, "pdf_sha256": {"$ref": "#/$defs/hash"},
+        "status": {"enum": ["pass", "block"]}, "reason_codes": {"type": "array", "items": {"type": "string"}},
+        "frames": {"type": "array", "items": {"type": "object"}}
+      }
+    }
+  }
+}

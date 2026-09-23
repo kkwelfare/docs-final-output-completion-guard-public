@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "rule_id", "status", "review_status", "artifact_path", "artifact_sha256", "checks", "provenance"],
+  "properties": {
+    "schema_version": {"const": "docs-artifact-quality-evidence-1"},
+    "rule_id": {"enum": ["AQ-CHANGE-01", "AQ-IDENTITY-01", "AQ-ASSET-01", "AQ-AUTHORITY-01", "AQ-BOUNDARY-01", "AQ-RELATION-01", "AQ-SCOPE-01", "AQ-VISIBLE-01", "AQ-FIXTURE-01", "AQ-LOCAL-GLOBAL-01"]},
+    "status": {"const": "pass"},
+    "review_status": {"const": "pass"},
+    "artifact_path": {"type": "string", "pattern": "^/"},
+    "artifact_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "provenance": {"type": "object", "additionalProperties": false, "required": ["kind", "id"], "properties": {"kind": {"enum": ["reviewer", "checker"]}, "id": {"type": "string", "minLength": 1}}},
+    "checks": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"type": "object", "required": ["id", "status"], "properties": {"id": {"type": "string", "minLength": 1}, "status": {"const": "pass"}}}},
+    "content_block_evidence": {"type": "object"},
+    "relation_family": {"type": "object"}
+  }
+}

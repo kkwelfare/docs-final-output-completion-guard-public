@@ -1,0 +1,248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "jevDesignEvaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "schema_version": {"const": "docs-jev-design-evaluation-1"},
+        "enabled": {"type": "boolean"},
+        "model": {"type": "string", "minLength": 1},
+        "timeout_seconds": {"type": "number", "exclusiveMinimum": 0, "maximum": 120},
+        "max_candidates": {"type": "integer", "minimum": 1, "maximum": 64},
+        "provider_mode": {"const": "typesafe_then_openrouter"},
+        "allow_live_provider": {"type": "boolean"},
+        "request_set": {"type": "object", "additionalProperties": false, "required": ["id", "expected_count"], "properties": {"id": {"type": "string", "minLength": 1}, "expected_count": {"type": "integer", "minimum": 1, "maximum": 64}, "count": {"type": "integer", "minimum": 1, "maximum": 64}}},
+        "categories": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["information_priority", "readability_proxies", "visual_hierarchy_structure", "claim_support", "comparison_semantics", "connector_meaning", "misinterpretation_risk"]}},
+        "design_intent": {"type": "object", "required": ["categories"], "properties": {"schema_version": {"const": "docs-jev-design-intent-1"}, "categories": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["information_priority", "readability_proxies", "visual_hierarchy_structure", "claim_support", "comparison_semantics", "connector_meaning", "misinterpretation_risk"]}}, "priority_order": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}, "element_roles": {"type": "array", "items": {"type": "object"}}, "claims": {"type": "array", "items": {"type": "object"}}, "comparisons": {"type": "array", "items": {"type": "object"}}, "connectors": {"type": "array", "items": {"type": "object"}}, "risk_tolerance": {"enum": ["low", "medium", "high"]}}}
+      },
+      "allOf": [{"if": {"properties": {"enabled": {"const": true}}}, "then": {"required": ["categories", "design_intent"]}}]
+    },
+    "handle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/"},
+        "sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "ruleSpec": {"type": "object", "minProperties": 1}
+  },
+  "type": "object",
+  "required": ["schema_version", "artifact_kind", "artifact_quality", "artifacts", "authoritative_source", "visible_criteria", "rule_contracts"],
+  "properties": {
+    "schema_version": {"enum": ["docs-artifact-quality-contract-1", "docs-artifact-quality-contract-2"]},
+    "artifact_kind": {"type": "string", "minLength": 1},
+    "artifact_quality": {
+      "type": "object",
+      "required": ["required"],
+      "properties": {
+        "required": {"const": true},
+        "extensions": {"type": "array", "items": {"type": "string"}},
+        "rule_targets": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^/"}},
+        "layout_typography": {
+          "type": "object",
+          "required": ["required"],
+          "properties": {
+            "required": {"const": true},
+            "expected_cjk_fonts": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+            "cjk_font_evidence_required": {"type": "boolean"},
+            "cjk_font_evidence": {"$ref": "#/$defs/handle"},
+            "geometry_contract_required": {"type": "boolean"},
+            "measurement_basis": {"const": "pdf_points"},
+            "minimum_gap_pt": {"type": "number", "minimum": 0},
+            "dead_space": {
+              "type": "object",
+              "properties": {
+                "bottom_blank_ratio_max": {"type": "number", "minimum": 0, "maximum": 1},
+                "last_content_to_footer_max_pt": {"type": "number", "minimum": 0}
+              },
+              "anyOf": [
+                {"required": ["bottom_blank_ratio_max"]},
+                {"required": ["last_content_to_footer_max_pt"]}
+              ]
+            },
+            "cjk_contract": {"type": "object", "required": ["required"], "properties": {"required": {"const": true}}},
+            "wrap_plan_receipt": {"type": "string", "pattern": "^/"},
+            "wrap_plan_receipt_sha256": {"$ref": "#/$defs/hash"},
+            "cjk_appearance_regions": {"type": "array", "minItems": 1, "items": {"type": "object"}},
+            "line_spacing_policy": {
+              "type": "object", "additionalProperties": false, "required": ["enabled"],
+              "properties": {
+                "enabled": {"type": "boolean"}, "mode": {"enum": ["shadow", "enforced"]},
+                "measurement_basis": {"const": "rendered_baseline_to_baseline_over_font_size"},
+                "target_roles": {"const": ["body"]}, "target_region_ids": {"$ref": "#/$defs/ids"},
+                "candidate_ratios": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "number", "exclusiveMinimum": 0, "maximum": 2.0}},
+                "requested_max_ratio": {"type": "number", "exclusiveMinimum": 0, "maximum": 2.0, "default": 2.0},
+                "selection": {"const": "manual_accepted_candidate"},
+                "preserve": {"type": "array", "minItems": 9, "maxItems": 9, "uniqueItems": true, "items": {"enum": ["text", "explicit_breaks", "font_size", "character_spacing", "word_spacing", "font_family", "font_weight", "horizontal_geometry", "hanging_indent"]}},
+                "evidence_manifest": {"$ref": "#/$defs/handle"}
+              },
+              "allOf": [{"if": {"properties": {"enabled": {"const": true}}}, "then": {"required": ["mode", "measurement_basis", "target_roles", "target_region_ids", "candidate_ratios", "selection", "preserve"]}}]
+            },
+            "content_block_policy": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["enabled"],
+              "properties": {
+                "enabled": {"type": "boolean"},
+                "source_preference": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+                "source_evidence": {"$ref": "#/$defs/handle"},
+                "source_evidence_required": {"type": "boolean"},
+                "strict_identity": {
+                  "type": "object", "additionalProperties": false,
+                  "required": ["producer_run_id", "artifact_set_id"],
+                  "properties": {"producer_run_id": {"type": "integer", "minimum": 0}, "artifact_set_id": {"$ref": "#/$defs/hash"}}
+                },
+                "relation_sink": {"const": "AQ-RELATION-01"},
+                "target_roles": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+                "include_surfaces": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["text", "table_fill", "table_border", "line", "icon", "image", "shape"]}},
+                "exclude_roles": {"type": "array", "items": {"type": "string", "minLength": 1}},
+                "min_x_overlap_ratio": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+                "touch_tolerance_pt": {"type": "number", "minimum": 0},
+                "ambiguous_mapping": {"const": "manual_review"},
+                "max_review_groups": {"type": "integer", "minimum": 1},
+                "model_call_if_zero_candidates": {"const": false},
+                "spacing_policy": {
+                  "type": "object", "additionalProperties": false, "required": ["enabled"],
+                  "properties": {
+                    "enabled": {"type": "boolean"},
+                    "mode": {"enum": ["shadow", "enforced"]},
+                    "measurement_basis": {"const": "pdf_points"},
+                    "target_scopes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["inter_block", "intra_block"]}},
+                    "selection": {"const": "manual_accepted_candidate"}
+                  },
+                  "allOf": [{"if": {"properties": {"enabled": {"const": true}}}, "then": {"required": ["mode", "measurement_basis", "target_scopes", "selection"]}}]
+                },
+                "inter_block_min_gap_pt": {"type": "number", "minimum": 0},
+                "intra_block_min_gap_pt": {"type": "number", "minimum": 0},
+                "minimum_gap_pt": {"type": "number", "minimum": 0},
+                "spacing_baselines": {"type": "object"},
+                "relation_policy": {
+                  "type": "object", "additionalProperties": false, "required": ["status"],
+                  "properties": {
+                    "status": {"enum": ["not_applicable", "declared"]},
+                    "required_relation_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+                  },
+                  "allOf": [{"if": {"properties": {"status": {"const": "declared"}}}, "then": {"required": ["required_relation_ids"]}}]
+                }
+              },
+              "allOf": [{"if": {"properties": {"enabled": {"const": true}}}, "then": {"required": ["source_preference", "relation_sink", "target_roles", "include_surfaces", "ambiguous_mapping", "max_review_groups", "model_call_if_zero_candidates"]}}]
+            },
+            "jev_overlap": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["enabled"],
+              "properties": {
+                "enabled": {"type": "boolean"},
+                "model": {"type": "string", "minLength": 1},
+                "timeout_seconds": {"type": "number", "exclusiveMinimum": 0, "maximum": 120},
+                "max_candidates": {"type": "integer", "minimum": 1, "maximum": 64},
+                "provider_mode": {"const": "typesafe_then_openrouter"},
+                "allow_live_provider": {"type": "boolean"}
+              }
+            },
+            "jev_design_evaluation": {"$ref": "#/$defs/jevDesignEvaluation"},
+            "jev_post_render_review": {"$ref": "docs-jev-post-render-config-1.json"}
+          }
+        },
+        "safe_wrap": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["required", "receipt_path"],
+          "properties": {
+            "required": {"const": true},
+            "receipt_path": {"type": "string", "pattern": "^/"},
+            "safe_ratio": {"type": "number", "minimum": 0.90, "maximum": 0.92}
+          }
+        },
+        "html_pdf": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["required", "source_path", "receipt_path"],
+          "properties": {
+            "required": {"const": true},
+            "source_path": {"type": "string", "pattern": "^/"},
+            "receipt_path": {"type": "string", "pattern": "^/"}
+          }
+        },
+        "quality_foundation": {"type": "object", "required": ["required", "spacing_tokens_pt", "semantic_regions"]},
+        "artifact_profile": {"type": "object", "required": ["id", "values"]},
+        "composition_evidence": {"$ref": "#/$defs/handle"},
+        "design_preset": {"type": "object", "properties": {"required": {"type": "boolean"}, "id": {"type": "string", "minLength": 1}}}
+      }
+    },
+    "execution_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "producer_receipt"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/"},
+        "producer_receipt": {"type": "string", "pattern": "^/"}
+      }
+    },
+    "finalization_manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "receiver_receipt"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/"},
+        "receiver_receipt": {"type": "string", "pattern": "^/"}
+      }
+    },
+    "artifacts": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^/"}},
+    "authoritative_source": {
+      "type": "object",
+      "required": ["path", "sha256", "readback_mode"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/"},
+        "sha256": {"$ref": "#/$defs/hash"},
+        "readback_mode": {"type": "string", "minLength": 1}
+      }
+    },
+    "visible_criteria": {"type": "array", "minItems": 5, "maxItems": 8, "items": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string", "minLength": 1}}}},
+    "render_contract": {"type": "object"},
+    "rule_contracts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["AQ-CHANGE-01", "AQ-IDENTITY-01", "AQ-ASSET-01", "AQ-AUTHORITY-01", "AQ-BOUNDARY-01", "AQ-RELATION-01", "AQ-SCOPE-01", "AQ-VISIBLE-01", "AQ-FIXTURE-01", "AQ-LOCAL-GLOBAL-01"],
+      "properties": {
+        "AQ-CHANGE-01": {"$ref": "#/$defs/ruleSpec"},
+        "AQ-IDENTITY-01": {"$ref": "#/$defs/ruleSpec"},
+        "AQ-ASSET-01": {"$ref": "#/$defs/ruleSpec"},
+        "AQ-AUTHORITY-01": {"$ref": "#/$defs/ruleSpec"},
+        "AQ-BOUNDARY-01": {"$ref": "#/$defs/ruleSpec"},
+        "AQ-RELATION-01": {"$ref": "#/$defs/ruleSpec"},
+        "AQ-SCOPE-01": {"$ref": "#/$defs/ruleSpec"},
+        "AQ-VISIBLE-01": {"$ref": "#/$defs/ruleSpec"},
+        "AQ-FIXTURE-01": {"$ref": "#/$defs/ruleSpec"},
+        "AQ-LOCAL-GLOBAL-01": {"$ref": "#/$defs/ruleSpec"}
+      }
+    },
+    "common_rule_applicability": {"$ref": "docs-artifact-quality-common-rule-applicability-1.json"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"artifacts": {"contains": {"type": "string", "pattern": "(?i)\\.pdf$"}}}},
+      "then": {"properties": {"artifact_quality": {"required": ["layout_typography"]}}}
+    },
+    {
+      "if": {"required": ["finalization_manifest"]},
+      "then": {
+        "properties": {
+          "artifact_quality": {
+            "properties": {
+              "layout_typography": {
+                "required": ["measurement_basis", "minimum_gap_pt", "dead_space", "cjk_contract", "wrap_plan_receipt", "wrap_plan_receipt_sha256", "cjk_appearance_regions"]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

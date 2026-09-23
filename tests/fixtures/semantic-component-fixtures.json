@@ -1,0 +1,14 @@
+{
+  "schema_version": "semantic-component-fixtures-1",
+  "positive": [
+    {"id": "plain-list", "family": "plain", "topology": "stack", "divider_policy": "none", "connector_policy": "none", "asset_backend": "none", "wrapper_border": "none"},
+    {"id": "semantic-cards", "family": "card", "topology": "stack", "divider_policy": "none", "connector_policy": "none", "asset_backend": "native", "wrapper_border": "none"},
+    {"id": "paired-comparison", "family": "group", "topology": "paired", "divider_policy": "explicit-between", "connector_policy": "none", "asset_backend": "native", "wrapper_border": "none"},
+    {"id": "flow-connector", "family": "flow", "topology": "sequence", "divider_policy": "none", "connector_policy": "directed", "asset_backend": "native", "wrapper_border": "none"},
+    {"id": "hierarchy-svg", "family": "diagram", "topology": "hierarchy", "divider_policy": "none", "connector_policy": "directed", "asset_backend": "svg", "wrapper_border": "none"},
+    {"id": "table-grid", "family": "table", "topology": "grid", "divider_policy": "grid-only", "connector_policy": "none", "asset_backend": "native", "wrapper_border": "none"},
+    {"id": "code-panel", "family": "code", "topology": "none", "divider_policy": "none", "connector_policy": "none", "asset_backend": "native", "wrapper_border": "none"},
+    {"id": "group-callout", "family": "callout", "topology": "band", "divider_policy": "none", "connector_policy": "none", "asset_backend": "native", "wrapper_border": "none"}
+  ],
+  "negative": ["undeclared-rule", "duplicate-boundary", "connector-foreground", "missing-card-body", "unwanted-svg-wrapper-border", "component-surface-mismatch", "identity-drift"]
+}

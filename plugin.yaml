@@ -1,0 +1,9 @@
+name: docs-final-output-completion-guard
+version: "1.2.0"
+description: "Blocks docs completion unless deterministic local quality, finalization, review, and receiver readbacks agree; ships an optional host adapter for portable verification."
+provides_tools:
+  - docs_jev_post_render_review
+hooks:
+  - pre_tool_call
+provides_hooks:
+  - pre_tool_call

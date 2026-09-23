@@ -1,0 +1,19 @@
+{
+  "schema_version": "docs-delivery-workflow-fixtures-1",
+  "cases": [
+    {"id": "harness-source-first-new-identity-pass", "expected": "pass"},
+    {"id": "deadline-existing-artifact-repair-pass", "expected": "pass"},
+    {"id": "deadline-source-repair-pass", "expected": "pass"},
+    {"id": "submission-required-block", "expected": "block"},
+    {"id": "record-tamper-block", "expected": "block"},
+    {"id": "ledger-body-block", "expected": "block"},
+    {"id": "ledger-pii-block", "expected": "block"},
+    {"id": "cross-task-block", "expected": "block"},
+    {"id": "mode-strategy-conflict-block", "expected": "block"},
+    {"id": "artifact-hash-drift-block", "expected": "block"},
+    {"id": "premature-hardening-block", "expected": "block"},
+    {"id": "legacy-without-workflow-pass-through", "expected": "pass"},
+    {"id": "candidate-zero-pass", "expected": "pass"},
+    {"id": "bounded-hardening-pass", "expected": "pass"}
+  ]
+}

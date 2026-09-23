@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "rule_id", "status", "review_status", "artifact_path", "artifact_sha256", "binary_render", "checks", "provenance"],
+  "properties": {
+    "schema_version": {"const": "docs-fax-legibility-evidence-1"},
+    "rule_id": {"const": "FAX-LEGIBILITY-01"},
+    "status": {"const": "pass"},
+    "review_status": {"const": "pass"},
+    "artifact_path": {"type": "string", "pattern": "^/"},
+    "artifact_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "binary_render": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status"],
+        "properties": {
+          "id": {"enum": ["black-fill", "thin-text", "rules", "images", "key-information"]},
+          "status": {"const": "pass"}
+        }
+      }
+    },
+    "provenance": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "id"],
+          "properties": {
+            "type": {"enum": ["reviewer", "checker"]},
+            "id": {"type": "string", "minLength": 1}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "prior_evidence"],
+          "properties": {
+            "type": {"const": "approved-reuse"},
+            "prior_evidence": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["path", "sha256"],
+              "properties": {
+                "path": {"type": "string", "pattern": "^/"},
+                "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

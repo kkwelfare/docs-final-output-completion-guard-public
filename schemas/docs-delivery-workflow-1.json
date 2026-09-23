@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "docs-delivery-workflow-1.json",
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "snapshot": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path_id", "sha256", "size_bytes"],
+      "properties": {
+        "path_id": {"$ref": "#/$defs/hash"},
+        "sha256": {"$ref": "#/$defs/hash"},
+        "size_bytes": {"type": "integer", "minimum": 0}
+      }
+    },
+    "handle": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256", "size_bytes"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/"},
+        "sha256": {"$ref": "#/$defs/hash"},
+        "size_bytes": {"type": "integer", "minimum": 0}
+      }
+    }
+  },
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "workflow_id", "record_hash", "task_id", "mode", "strategy", "state", "source_snapshot", "baseline_artifact", "output_path_id", "adapter", "result_artifact", "candidate_ledger", "hardening_receipt"],
+  "properties": {
+    "schema_version": {"const": "docs-delivery-workflow-1"},
+    "workflow_id": {"$ref": "#/$defs/hash"},
+    "record_hash": {"$ref": "#/$defs/hash"},
+    "task_id": {"type": "string", "pattern": "^t_[a-z0-9]+$"},
+    "mode": {"enum": ["harness_development", "deadline_delivery"]},
+    "strategy": {"enum": ["source_first_rebuild", "existing_artifact_repair", "source_repair"]},
+    "state": {"enum": ["repair_in_progress", "submitted", "hardening_ready", "hardened"]},
+    "source_snapshot": {"$ref": "#/$defs/snapshot"},
+    "baseline_artifact": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/snapshot"}]},
+    "output_path_id": {"$ref": "#/$defs/hash"},
+    "adapter": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "capabilities", "producer_mutation"],
+      "properties": {
+        "id": {"const": "docs-delivery-workflow-adapter-1"},
+        "capabilities": {"const": ["record_candidate", "validate_completion"]},
+        "producer_mutation": {"const": false}
+      }
+    },
+    "result_artifact": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/handle"}]},
+    "candidate_ledger": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/handle"}]},
+    "hardening_receipt": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/handle"}]}
+  },
+  "allOf": [
+    {"if": {"properties": {"mode": {"const": "harness_development"}}}, "then": {"properties": {"strategy": {"const": "source_first_rebuild"}, "baseline_artifact": {"type": "null"}}}},
+    {"if": {"properties": {"mode": {"const": "deadline_delivery"}}}, "then": {"properties": {"strategy": {"enum": ["existing_artifact_repair", "source_repair"]}}}},
+    {"if": {"properties": {"state": {"const": "repair_in_progress"}}}, "then": {"properties": {"result_artifact": {"type": "null"}, "hardening_receipt": {"type": "null"}}}},
+    {"if": {"properties": {"state": {"enum": ["submitted", "hardening_ready"]}}}, "then": {"properties": {"result_artifact": {"$ref": "#/$defs/handle"}, "candidate_ledger": {"$ref": "#/$defs/handle"}, "hardening_receipt": {"type": "null"}}}},
+    {"if": {"properties": {"state": {"const": "hardened"}}}, "then": {"properties": {"result_artifact": {"$ref": "#/$defs/handle"}, "candidate_ledger": {"$ref": "#/$defs/handle"}, "hardening_receipt": {"$ref": "#/$defs/handle"}}}}
+  ]
+}

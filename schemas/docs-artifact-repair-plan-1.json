@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chanmi.local/schemas/docs-artifact-repair-plan-1.json",
+  "title": "Body-free bounded artifact repair plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "policy_version", "status", "task_id", "attempt", "max_attempts",
+    "contract_id", "producer_run_id", "artifact_set_id", "source",
+    "source_content_identity_sha256", "artifact", "scan", "scan_hash", "issues", "adapter",
+    "old_artifact_path_id", "new_revision_root_id", "plan_hash"
+  ],
+  "properties": {
+    "schema_version": {"const": "docs-artifact-repair-plan-1"},
+    "policy_version": {"const": "docs-bounded-artifact-repair/1"},
+    "status": {"const": "admitted"},
+    "task_id": {"type": "string", "pattern": "^t_[a-z0-9]+$"},
+    "attempt": {"type": "integer", "minimum": 1, "maximum": 2},
+    "max_attempts": {"type": "integer", "enum": [1, 2]},
+    "contract_id": {"$ref": "#/$defs/hash"},
+    "producer_run_id": {"type": "string", "minLength": 1},
+    "artifact_set_id": {"$ref": "#/$defs/hash"},
+    "source": {"$ref": "#/$defs/handle"},
+    "source_content_identity_sha256": {"$ref": "#/$defs/hash"},
+    "artifact": {"$ref": "#/$defs/handle"},
+    "scan": {"$ref": "#/$defs/handle"},
+    "scan_hash": {"$ref": "#/$defs/hash"},
+    "issues": {
+      "type": "array", "minItems": 1, "uniqueItems": true,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["issue_id", "source_issue_id", "rule", "family", "operation"],
+        "properties": {
+          "issue_id": {"$ref": "#/$defs/hash"},
+          "source_issue_id": {"type": ["string", "null"]},
+          "rule": {"enum": ["rendered_orphan_ratio", "semantic_surface_area_ratio", "semantic_surface_sparse_container", "semantic_surface_consecutive_prominent_pages"]},
+          "family": {"enum": ["boundary", "containment", "relation", "spacing", "alignment", "safe-wrap", "coverage", "identity", "semantic-surface"]},
+          "operation": {"enum": ["geometry_adjustment", "spacing_adjustment", "alignment_adjustment", "wrap_adjustment", "coverage_adjustment", "identity_rebind", "surface_recompose"]}
+        }
+      }
+    },
+    "adapter": {
+      "type": "object", "additionalProperties": false,
+      "required": ["adapter_id", "producer_kind", "fingerprint", "capabilities"],
+      "properties": {
+        "adapter_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{2,63}$"},
+        "producer_kind": {"type": "string", "minLength": 1},
+        "fingerprint": {"$ref": "#/$defs/hash"},
+        "capabilities": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["family", "operation"],
+            "properties": {
+              "family": {"enum": ["boundary", "containment", "relation", "spacing", "alignment", "safe-wrap", "coverage", "identity", "semantic-surface"]},
+              "operation": {"enum": ["geometry_adjustment", "spacing_adjustment", "alignment_adjustment", "wrap_adjustment", "coverage_adjustment", "identity_rebind", "surface_recompose"]}
+            }
+          }
+        }
+      }
+    },
+    "old_artifact_path_id": {"$ref": "#/$defs/hash"},
+    "new_revision_root_id": {"$ref": "#/$defs/hash"},
+    "plan_hash": {"$ref": "#/$defs/hash"}
+  },
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "handle": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256", "size_bytes"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/"},
+        "sha256": {"$ref": "#/$defs/hash"},
+        "size_bytes": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

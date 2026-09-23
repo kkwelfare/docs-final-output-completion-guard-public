@@ -1,0 +1,727 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "docs-jev-post-render-request-1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "docs-jev-post-render-request-1"
+    },
+    "enabled": {
+      "const": true
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "artifact": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "pattern": "^/",
+              "maxLength": 4096
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ]
+        },
+        "scan": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "pattern": "^/",
+              "maxLength": 4096
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ]
+        },
+        "artifact_set_id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "producer": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "task_id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+            },
+            "run_id": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "task_id",
+            "run_id"
+          ]
+        },
+        "candidate_set_digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "artifact",
+        "scan",
+        "artifact_set_id",
+        "producer",
+        "candidate_set_digest"
+      ]
+    },
+    "reviewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "run_id": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "task_id",
+        "run_id"
+      ]
+    },
+    "provider": {
+      "const": "typesafe-system-one"
+    },
+    "model": {
+      "const": "jev-latest"
+    },
+    "allow_live_provider": {
+      "type": "boolean"
+    },
+    "timeout_seconds": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 120
+    },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+          },
+          "rule": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "bbox_pdf_points": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": -1000000,
+              "maximum": 1000000
+            },
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "affected_pages": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "minItems": 1,
+            "maxItems": 64,
+            "uniqueItems": true
+          },
+          "render": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "pattern": "^/",
+                    "maxLength": 4096
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
+                },
+                "required": [
+                  "path",
+                  "sha256"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "pattern": "^/",
+                    "maxLength": 4096
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "page": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "width": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000
+                  },
+                  "height": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000
+                  },
+                  "render_scale": {
+                    "type": "number",
+                    "minimum": 0.25,
+                    "maximum": 4
+                  },
+                  "bbox_pdf_points": {
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    "minItems": 4,
+                    "maxItems": 4
+                  },
+                  "bbox_render_pixels": {
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    "minItems": 4,
+                    "maxItems": 4
+                  }
+                },
+                "required": [
+                  "path",
+                  "sha256",
+                  "page",
+                  "width",
+                  "height",
+                  "render_scale",
+                  "bbox_pdf_points",
+                  "bbox_render_pixels"
+                ]
+              }
+            ]
+          },
+          "criteria": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "geometry_consistency",
+                "line_spacing",
+                "region_occupancy",
+                "font_size_consistency",
+                "cjk_glyph_locale"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 4,
+            "uniqueItems": true
+          },
+          "semantic_role": {
+            "enum": [
+              "heading",
+              "body",
+              "caption",
+              "footer",
+              "decoration",
+              "container",
+              "unspecified"
+            ]
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "region_normalization": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["epsilon_pt", "normalized_bbox_pdf_points", "applied"],
+                "properties": {
+                  "epsilon_pt": {"const": 0.005},
+                  "normalized_bbox_pdf_points": {
+                    "type": "array", "minItems": 4, "maxItems": 4,
+                    "items": {"type": "number", "minimum": 0, "maximum": 1000000}
+                  },
+                  "applied": {"type": "boolean"}
+                }
+              },
+              "basis": {
+                "const": "pdf_points"
+              },
+              "page_size": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 1000000
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "lines": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "bbox": {
+                      "type": "array",
+                      "items": {
+                        "type": "number",
+                        "minimum": -1000000,
+                        "maximum": 1000000
+                      },
+                      "minItems": 4,
+                      "maxItems": 4
+                    },
+                    "font_sizes": {
+                      "type": "array",
+                      "items": {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "maximum": 10000
+                      },
+                      "minItems": 1,
+                      "maxItems": 64
+                    },
+                    "font_hashes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "minItems": 1,
+                      "maxItems": 64
+                    },
+                    "character_count": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 100000
+                    },
+                    "colors_rgb": {
+                      "type": "array",
+                      "items": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 16777215
+                      },
+                      "minItems": 1,
+                      "maxItems": 64
+                    },
+                    "flags": {
+                      "type": "array",
+                      "items": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 65535
+                      },
+                      "minItems": 1,
+                      "maxItems": 64
+                    }
+                  },
+                  "required": [
+                    "bbox",
+                    "font_sizes",
+                    "font_hashes",
+                    "character_count",
+                    "colors_rgb",
+                    "flags"
+                  ]
+                },
+                "minItems": 0,
+                "maxItems": 64
+              },
+              "line_order_gaps": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "minimum": -1000000,
+                  "maximum": 1000000
+                },
+                "minItems": 0,
+                "maxItems": 63
+              },
+              "vertical_line_coverage": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "glyph_locale": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "basis": {
+                    "const": "pdf_bytes_and_local_render_proxies_not_visual_perception"
+                  },
+                  "text_layer_character_count": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000
+                  },
+                  "cjk_glyph_count": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000
+                  },
+                  "replacement_character_count": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000
+                  },
+                  "glyphs": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "bbox": {
+                          "type": "array",
+                          "items": {
+                            "type": "number",
+                            "minimum": -1000000,
+                            "maximum": 1000000
+                          },
+                          "minItems": 4,
+                          "maxItems": 4
+                        },
+                        "contained": {
+                          "type": "boolean"
+                        },
+                        "span_flags": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1000000
+                        },
+                        "font_xref": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1000000
+                        }
+                      },
+                      "required": [
+                        "bbox",
+                        "contained",
+                        "span_flags",
+                        "font_xref"
+                      ]
+                    },
+                    "minItems": 0,
+                    "maxItems": 512
+                  },
+                  "fonts": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "xref": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1000000
+                        },
+                        "name_sha256": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "embedded_sha256": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "embedded": {
+                          "type": "boolean"
+                        },
+                        "to_unicode_present": {
+                          "type": "boolean"
+                        },
+                        "descriptor_flags": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1000000
+                        },
+                        "selector_name_match": {
+                          "type": "boolean"
+                        },
+                        "selector_file_match": {
+                          "type": "boolean"
+                        },
+                        "japanese_name_proxy": {
+                          "type": "boolean"
+                        },
+                        "non_japanese_name_proxy": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "xref",
+                        "name_sha256",
+                        "embedded_sha256",
+                        "embedded",
+                        "to_unicode_present",
+                        "descriptor_flags",
+                        "selector_name_match",
+                        "selector_file_match",
+                        "japanese_name_proxy",
+                        "non_japanese_name_proxy"
+                      ]
+                    },
+                    "minItems": 0,
+                    "maxItems": 32
+                  },
+                  "selector": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "available": {
+                        "type": "boolean"
+                      },
+                      "family_sha256": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "file_sha256": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "selector_sha256": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "priority": {
+                        "enum": [
+                          "ud-p-gothic-primary",
+                          "ud-gothic-secondary",
+                          "noto-sans-jp-tertiary",
+                          "noto-serif-jp-tertiary",
+                          "ipa-gothic-tertiary",
+                          "ipa-mincho-tertiary",
+                          "none"
+                        ]
+                      },
+                      "fallback_decision": {
+                        "enum": [
+                          "primary_ud_p_gothic_selected; no_fallback_used",
+                          "primary_ud_p_gothic_unavailable; secondary_ud_gothic_selected",
+                          "ud_gothic_families_unavailable; noto_sans_jp_selected",
+                          "ud_gothic_families_unavailable; noto_serif_jp_selected",
+                          "ud_and_noto_jp_families_unavailable; ipa_gothic_selected",
+                          "ud_and_noto_jp_families_unavailable; ipa_mincho_selected",
+                          "no_explicit_japanese_allowlist_font_available; generation_must_stop"
+                        ]
+                      },
+                      "basis": {
+                        "const": "current_local_selector_not_producer_attestation"
+                      }
+                    },
+                    "required": [
+                      "available",
+                      "family_sha256",
+                      "file_sha256",
+                      "selector_sha256",
+                      "priority",
+                      "fallback_decision",
+                      "basis"
+                    ]
+                  },
+                  "render_verified": {
+                    "const": true
+                  },
+                  "render_samples_sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "local_render": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "width": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000000
+                      },
+                      "height": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000000
+                      },
+                      "nonwhite_ratio": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "gray_mean": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 255
+                      },
+                      "samples_sha256": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "basis": {
+                        "const": "local_grayscale_1x_no_pixels_transmitted"
+                      }
+                    },
+                    "required": [
+                      "width",
+                      "height",
+                      "nonwhite_ratio",
+                      "gray_mean",
+                      "samples_sha256",
+                      "basis"
+                    ]
+                  },
+                  "evidence_sufficient": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "basis",
+                  "text_layer_character_count",
+                  "cjk_glyph_count",
+                  "replacement_character_count",
+                  "glyphs",
+                  "fonts",
+                  "selector",
+                  "render_verified",
+                  "render_samples_sha256",
+                  "local_render",
+                  "evidence_sufficient"
+                ]
+              }
+            },
+            "required": [
+              "basis",
+              "page_size",
+              "lines",
+              "line_order_gaps",
+              "vertical_line_coverage"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "rule",
+          "page",
+          "bbox_pdf_points",
+          "affected_pages",
+          "render",
+          "criteria",
+          "semantic_role",
+          "metrics"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "rule": {
+                  "const": "cjk_glyph_or_region_appearance_anomaly_candidate"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "criteria": {
+                  "const": [
+                    "cjk_glyph_locale"
+                  ]
+                },
+                "metrics": {
+                  "required": [
+                    "glyph_locale"
+                  ]
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "metrics": {
+                  "not": {
+                    "required": [
+                      "glyph_locale"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "minItems": 1,
+      "maxItems": 20
+    }
+  },
+  "required": [
+    "schema_version",
+    "enabled",
+    "binding",
+    "reviewer",
+    "provider",
+    "model",
+    "allow_live_provider",
+    "timeout_seconds",
+    "candidates"
+  ]
+}

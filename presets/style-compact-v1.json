@@ -1,0 +1,21 @@
+{
+  "schema_version": "docs-style-preset-1",
+  "preset_id": "docs-style-compact-v1",
+  "version": 1,
+  "name": "portable-compact",
+  "font_policy": {
+    "source": "host-adapter",
+    "fallback": "block-on-missing-required-font",
+    "discovery": "explicit-host-roots"
+  },
+  "layout": {
+    "max_lines": 3,
+    "safe_width_ratio": 0.86,
+    "implicit_wrap": "forbidden"
+  },
+  "renderer_policy": {
+    "network": "disabled",
+    "image_transport": "forbidden"
+  },
+  "ruleset_id": "docs-quality-ruleset-v3"
+}

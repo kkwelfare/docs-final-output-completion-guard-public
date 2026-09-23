@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://chanmi.local/schemas/docs-artifact-repair-controller-receipt-1.json",
+  "title": "Bounded artifact repair controller receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "policy_version", "status", "task_id", "max_attempts", "attempts", "artifact_set_id", "final_artifact", "final_aq_receipt", "checker_exit_code", "old_artifact", "source_content_identity_sha256", "receipt_hash"],
+  "properties": {
+    "schema_version": {"const": "docs-artifact-repair-controller-receipt-1"},
+    "policy_version": {"const": "docs-bounded-artifact-repair/1"},
+    "status": {"const": "pass"},
+    "task_id": {"type": "string", "pattern": "^t_[a-z0-9]+$"},
+    "max_attempts": {"type": "integer", "enum": [1, 2]},
+    "attempts": {
+      "type": "array", "minItems": 1, "maxItems": 2,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["attempt", "contract_id", "producer_run_id", "artifact_set_id", "source", "artifact", "scan", "plan", "adapter_output", "aq_receipt", "checker_exit_code"],
+        "properties": {
+          "attempt": {"type": "integer", "minimum": 1, "maximum": 2},
+          "contract_id": {"$ref": "#/$defs/hash"},
+          "producer_run_id": {"type": "string", "minLength": 1},
+          "artifact_set_id": {"$ref": "#/$defs/hash"},
+          "source": {"$ref": "#/$defs/handle"},
+          "artifact": {"$ref": "#/$defs/handle"},
+          "scan": {"$ref": "#/$defs/handle"},
+          "plan": {"$ref": "#/$defs/handle"},
+          "adapter_output": {"$ref": "#/$defs/handle"},
+          "aq_receipt": {"$ref": "#/$defs/handle"},
+          "checker_exit_code": {"type": "integer", "enum": [0, 2]}
+        }
+      }
+    },
+    "artifact_set_id": {"$ref": "#/$defs/hash"},
+    "final_artifact": {"$ref": "#/$defs/handle"},
+    "final_aq_receipt": {"$ref": "#/$defs/handle"},
+    "checker_exit_code": {"const": 0},
+    "old_artifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path_id", "sha256"],
+      "properties": {"path_id": {"$ref": "#/$defs/hash"}, "sha256": {"$ref": "#/$defs/hash"}}
+    },
+    "source_content_identity_sha256": {"$ref": "#/$defs/hash"},
+    "receipt_hash": {"$ref": "#/$defs/hash"}
+  },
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "handle": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256", "size_bytes"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/"},
+        "sha256": {"$ref": "#/$defs/hash"},
+        "size_bytes": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

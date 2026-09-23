@@ -1,0 +1,5 @@
+name: final-output-local-filter
+version: "1.0.0"
+description: "Deterministic, fail-open final-output cleanup with protected syntax preservation."
+provides_hooks:
+  - transform_llm_output

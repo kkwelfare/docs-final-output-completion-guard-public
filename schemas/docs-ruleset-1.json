@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/docs-ruleset-1.json",
+  "title": "Docs quality ruleset",
+  "type": "object",
+  "required": ["schema_version", "ruleset_id", "version", "rule_ids"],
+  "properties": {
+    "schema_version": {"const": "docs-ruleset-1"},
+    "ruleset_id": {"type": "string", "pattern": "^docs-quality-[a-z0-9-]+-v[0-9]+$"},
+    "version": {"type": "integer", "minimum": 1},
+    "rule_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+  },
+  "additionalProperties": true
+}
