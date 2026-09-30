@@ -90,10 +90,43 @@
           "criteria_results"
         ]
       },
-      "minItems": 1,
+      "minItems": 0,
       "maxItems": 20
+    },
+    "whole_artifact_review": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "disposition": {"enum": ["accepted", "repair_required", "uncertain"]},
+        "criteria_results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "criterion": {"const": "whole_artifact_structure"},
+              "status": {"enum": ["pass", "fail", "uncertain"]}
+            },
+            "required": ["criterion", "status"]
+          },
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+      },
+      "required": ["disposition", "criteria_results", "confidence"]
     }
   },
+  "oneOf": [
+    {
+      "properties": {"reviews": {"minItems": 1}},
+      "not": {"required": ["whole_artifact_review"]}
+    },
+    {
+      "properties": {"reviews": {"maxItems": 0}},
+      "required": ["whole_artifact_review"]
+    }
+  ],
   "required": [
     "schema_version",
     "request_sha256",

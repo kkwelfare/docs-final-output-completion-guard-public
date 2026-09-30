@@ -299,7 +299,9 @@ def test_generated_artifact_jev_runs_without_legacy_opt_in_and_guard_reads_back(
     normal_receipt, _ = checker.build_receipt(normal_path, evidence_dir=tmp_path / "normal-evidence")
     normal_rule = next(rule for rule in normal_receipt["entries"][0]["rules"] if rule["id"] == "AQ-LAYOUT-01")
     normal_scan = json.loads(Path(normal_rule["evidence"]["path"]).read_text(encoding="utf-8"))
-    assert normal_scan["generated_artifact_jev"]["status"] == "scanned_no_candidates"
+    assert normal_scan["generated_artifact_jev"]["status"] == "connection_failed"
+    assert normal_scan["generated_artifact_jev"]["evaluation_state"] == "error"
+    assert normal_scan["generated_artifact_jev"]["reason_code"] == "evaluation_identity_unavailable"
     assert guard._validate_scan_readback(normal_scan, artifact=normal_pdf, generated_jev_required=True) is None
 
     badge_pdf = _pdf(tmp_path / "badge-for-route.pdf", lambda page: (

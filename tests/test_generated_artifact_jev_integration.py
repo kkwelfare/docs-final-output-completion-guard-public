@@ -26,16 +26,19 @@ def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def test_checker_calls_existing_provider_and_completion_accepts_bound_owner_readback(tmp_path, monkeypatch):
+def test_checker_calls_existing_provider_and_completion_accepts_bound_owner_readback(tmp_path, monkeypatch, *, zero_candidates=False):
     checker = _load(ROOT / "check_docs_artifact_quality.py", "jev_normal_checker_integration")
     guard = _load(ROOT / "__init__.py", "jev_normal_completion_guard")
 
     artifact = tmp_path / "badge.pdf"
     doc = fitz.open()
     page = doc.new_page(width=300, height=180)
-    page.draw_circle((50, 50), 12, color=(0, 0, 0), fill=(0.9, 0.9, 0.9))
-    page.insert_text((50, 53), "1", fontsize=8)
-    page.insert_text((62, 53), "A", fontsize=9)
+    if zero_candidates:
+        page.insert_text((35, 70), "Structure fixture", fontsize=14)
+    else:
+        page.draw_circle((50, 50), 12, color=(0, 0, 0), fill=(0.9, 0.9, 0.9))
+        page.insert_text((50, 53), "1", fontsize=8)
+        page.insert_text((62, 53), "A", fontsize=9)
     doc.save(artifact)
     doc.close()
 
@@ -113,7 +116,18 @@ def test_checker_calls_existing_provider_and_completion_accepts_bound_owner_read
             "request_sha256": wire["request_sha256"], "reviews": reviews,
         }
 
-    monkeypatch.setattr(checker.jev_post_render, "text_provider", mocked_existing_provider)
+    if zero_candidates:
+        def mocked_transport(endpoint, key_env, model, payload, timeout):
+            calls.append((payload, timeout))
+            assert payload["questions"] and set(payload["questions"]) == {"artifact_q0"}
+            wire = json.loads(payload["state"])
+            assert wire["candidates"] == [] and wire["review_scope"] == "whole_artifact"
+            assert wire["whole_artifact"]["metrics"]["page_count"] == 1
+            assert "Structure fixture" not in payload["state"]
+            return {"answers": {"artifact_q0": {"choice": "pass", "confidence": 0.95}}}
+        monkeypatch.setattr(checker.jev_post_render.jev_overlap, "_post_provider", mocked_transport)
+    else:
+        monkeypatch.setattr(checker.jev_post_render, "text_provider", mocked_existing_provider)
     monkeypatch.setenv(checker.jev_post_render.jev_overlap.PRIMARY_API_KEY_ENV, "test-only-no-network")
 
     first_receipt, first_code = checker.build_receipt(contract_path, evidence_dir=evidence)
@@ -128,7 +142,12 @@ def test_checker_calls_existing_provider_and_completion_accepts_bound_owner_read
     request = json.loads(Path(route["request"]["path"]).read_text(encoding="utf-8"))
     assert request["reviewer"] == {"task_id": receiver_id, "run_id": receiver_run}
     assert request["allow_live_provider"] is True and len(calls) == 1
-    assert calls[0][0]["candidates"] and "body" not in calls[0][0]
+    if zero_candidates:
+        assert route["candidate_count"] == 0 and request["candidates"] == []
+        assert request["binding"]["review_scope"] == "whole_artifact"
+        assert route["evaluation_state"] == "executed"
+    else:
+        assert calls[0][0]["candidates"] and "body" not in calls[0][0]
     assert checker.generated_artifact_jev.validate_readback(first_scan, route) is None
 
     candidates = first_scan["REVIEW_CANDIDATE"]
@@ -178,3 +197,29 @@ def test_checker_calls_existing_provider_and_completion_accepts_bound_owner_read
         final_scan, artifact=artifact, generated_jev_required=True,
         review_path=review_path, artifact_set_id=manifest["artifact_set_id"],
     ) is None
+    assert final_scan["reviewed_scan_sha256"] == first_scan["reviewed_scan_sha256"]
+    observation = json.loads((evidence / "badge.AQ-LAYOUT-01.JEV.execution.json").read_text())
+    assert observation["evaluation_state"] == "evidence_reused"
+    if zero_candidates:
+        # Full normal checker path with changed bytes and refreshed bindings.
+        replacement = fitz.open()
+        replacement.new_page(width=300, height=180).insert_text((35, 70), "Changed fixture", fontsize=14)
+        replacement.save(artifact)
+        replacement.close()
+        manifest = checker.finalization.build_manifest(
+            [str(artifact)], source=str(source), checker=str(ROOT / "check_docs_artifact_quality.py"),
+            created_by_task_id=producer_id, created_by_run_id=producer_run, state="accepted",
+        )
+        manifest_path.write_text(json.dumps(manifest, sort_keys=True))
+        shutil.copyfile(artifact, receiver_copy)
+        receiver["artifact_set_id"] = manifest["artifact_set_id"]
+        receiver["copies"][0].update(sha256=_sha(receiver_copy), size_bytes=receiver_copy.stat().st_size)
+        receiver_path.write_text(json.dumps(receiver, sort_keys=True))
+        checker.build_receipt(contract_path, evidence_dir=evidence)
+        assert len(calls) == 2
+
+
+def test_zero_candidates_normal_checker_calls_transport_once_and_reuses(tmp_path, monkeypatch):
+    test_checker_calls_existing_provider_and_completion_accepts_bound_owner_readback(
+        tmp_path, monkeypatch, zero_candidates=True,
+    )

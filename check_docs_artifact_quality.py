@@ -837,6 +837,10 @@ def build_receipt(
                     producer=producer_identity, reviewer=reviewer_identity,
                     fixture_adapter=jev_fixture_adapter,
                 )
+                # Cache-hit bookkeeping is operational metadata, not a change
+                # to the artifact review input. Keep it out of the owner scan
+                # identity so an unchanged receipt remains reviewable on the
+                # evidence-reuse pass.
                 candidates = [item for item in scan["issues"] if item.get("severity") == "review"] + [
                     item for item in source_scan["issues"] if item.get("severity") == "review"
                 ]
@@ -845,6 +849,21 @@ def build_receipt(
                 visual_enabled = isinstance(visual_config, dict) and visual_config.get("enabled") is True
                 if visual_enabled:
                     scan = jev_post_render.prepare_raw_scan(scan, source_scan, surface_hard_failures)
+                generated_state = scan.get("generated_artifact_jev")
+                if isinstance(generated_state, dict) and "evaluation_state" in generated_state:
+                    # Invocation observations may change on a cache hit; the
+                    # actual scan bytes reviewed by the owner must not change.
+                    observation_path = evidence / f"{artifact.stem}.AQ-LAYOUT-01.JEV.execution.json"
+                    observation_path.write_text(json.dumps({
+                        "artifact_sha256": scan.get("artifact_sha256"),
+                        "evaluation_state": generated_state["evaluation_state"],
+                        "provider_invoked": generated_state.get("provider_invoked", False),
+                        "provider_status": generated_state.get("provider_status"),
+                        "request": generated_state.get("request"),
+                        "receipt": generated_state.get("receipt"),
+                    }, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+                    if generated_state["evaluation_state"] == "evidence_reused":
+                        generated_state["evaluation_state"] = "executed"
                 scan_path.write_text(json.dumps(scan, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
                 candidate_scan_sha256 = sha256(scan_path)
                 raw_visual_scan = scan_path.with_suffix(".raw.json")

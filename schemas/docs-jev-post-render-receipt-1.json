@@ -77,6 +77,12 @@
         "candidate_set_digest": {
           "type": "string",
           "pattern": "^[a-f0-9]{64}$"
+        },
+        "review_scope": {
+          "enum": [
+            "candidates",
+            "whole_artifact"
+          ]
         }
       },
       "required": [
@@ -149,7 +155,8 @@
         "timeout",
         "malformed_response",
         "provider_error",
-        "insufficient_evidence"
+        "insufficient_evidence",
+        "structural_metrics_limit_exceeded"
       ]
     },
     "measurements": {
@@ -261,8 +268,46 @@
       },
       "minItems": 0,
       "maxItems": 20
+    },
+    "whole_artifact_review": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "disposition": {"enum": ["accepted", "repair_required", "uncertain"]},
+        "criteria_results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "criterion": {"const": "whole_artifact_structure"},
+              "status": {"enum": ["pass", "fail", "uncertain"]}
+            },
+            "required": ["criterion", "status"]
+          },
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+      },
+      "required": ["disposition", "criteria_results", "confidence"]
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "binding": {"properties": {"review_scope": {"const": "whole_artifact"}}},
+          "status": {"not": {"const": "unresolved"}}
+        },
+        "required": ["binding", "status"]
+      },
+      "then": {
+        "required": ["whole_artifact_review"],
+        "properties": {"reviews": {"maxItems": 0}}
+      }
+    }
+  ],
   "required": [
     "schema_version",
     "route",

@@ -38,16 +38,24 @@ def run(*, artifact: Path, scan: dict[str, Any], evidence_dir: Path,
     supported = [item for item in review if item.get("rule") in jev_post_render.RULE_CRITERIA]
     if scan.get("hard_issue_count", 0) or scan.get("status") == "block":
         return {"status": "not_applicable", "candidate_count": len(supported),
-                "formal_provider_evidence": False, "reason_code": "deterministic_hard_fail"}
-    if not review:
-        return {"status": "scanned_no_candidates", "candidate_count": 0,
-                "formal_provider_evidence": False}
-    if not supported:
+                "formal_provider_evidence": False, "evaluation_state": "error",
+                "reason_code": "deterministic_hard_fail"}
+    if review and not supported:
         return {"status": "connection_failed", "candidate_count": len(review),
-                "formal_provider_evidence": False, "reason_code": "no_supported_candidate_type"}
-    if not artifact_set_id or not isinstance(producer, dict) or not reviewer:
+                "formal_provider_evidence": False, "evaluation_state": "error",
+                "reason_code": "no_supported_candidate_type"}
+    valid_id = (isinstance(artifact_set_id, str) and len(artifact_set_id) == 64
+                and all(ch in "0123456789abcdef" for ch in artifact_set_id))
+    valid_identity = lambda value: (
+        isinstance(value, dict) and isinstance(value.get("task_id"), str)
+        and bool(value.get("task_id")) and isinstance(value.get("run_id"), int)
+        and not isinstance(value.get("run_id"), bool) and value["run_id"] > 0
+    )
+    if (not valid_id or not valid_identity(producer) or not valid_identity(reviewer)
+            or producer.get("task_id") == reviewer.get("task_id")):
         return {"status": "connection_failed", "candidate_count": len(supported),
-                "formal_provider_evidence": False, "reason_code": "evaluation_identity_unavailable"}
+                "formal_provider_evidence": False, "evaluation_state": "error",
+                "reason_code": "evaluation_identity_unavailable"}
 
     # Bind only unchanged supported candidate descriptors; existing spacing
     # candidates retain their original rule and measurements.
@@ -74,6 +82,7 @@ def run(*, artifact: Path, scan: dict[str, Any], evidence_dir: Path,
         # Re-evaluating would change receipt timestamps and invalidate the
         # owner's scan hash even when the artifact and candidate set are fixed.
         receipt = None
+        evidence_reused = False
         if request_path.is_file() and receipt_path.is_file():
             try:
                 previous_request = jev_post_render.read_json(request_path)
@@ -85,6 +94,7 @@ def run(*, artifact: Path, scan: dict[str, Any], evidence_dir: Path,
                         and previous_receipt.get("request_sha256") == jev_post_render.digest(request)
                         and previous_receipt.get("execution_mode") == expected_mode):
                     receipt = previous_receipt
+                    evidence_reused = True
             except Exception:
                 pass
         _dump(request_path, request)
@@ -109,7 +119,9 @@ def run(*, artifact: Path, scan: dict[str, Any], evidence_dir: Path,
         )
         return {
             "status": "evaluated" if evaluated else "connection_failed",
+            "evaluation_state": "evidence_reused" if evidence_reused else "executed",
             "candidate_count": len(supported),
+            "review_scope": request["binding"]["review_scope"],
             "execution_mode": execution_mode,
             "provider_invoked": provider_invoked,
             "provider_status": stored_receipt.get("status"),
@@ -121,7 +133,7 @@ def run(*, artifact: Path, scan: dict[str, Any], evidence_dir: Path,
     except Exception as exc:
         reason = str(exc) if isinstance(exc, jev_post_render.PostRenderError) else "provider_or_evidence_error"
         return {"status": "connection_failed", "candidate_count": len(supported),
-                "formal_provider_evidence": False, "reason_code": reason,
+                "formal_provider_evidence": False, "evaluation_state": "error", "reason_code": reason,
                 "raw_scan": _handle(raw_path) if raw_path.is_file() else None}
 
 
@@ -136,8 +148,11 @@ def validate_readback(scan: dict[str, Any], state: dict[str, Any]) -> str | None
                  and item.get("rule") in jev_post_render.RULE_CRITERIA]
     if state.get("candidate_count") != len(supported) and state.get("reason_code") != "no_supported_candidate_type":
         return "AQ-LAYOUT-01: generated-artifact Jev candidate count mismatch"
-    if not supported and state.get("status") not in {"not_applicable", "scanned_no_candidates"}:
-        return "AQ-LAYOUT-01: generated-artifact Jev incorrectly skipped candidate-free scan"
+    if state.get("status") not in {"scanned_no_candidates", "not_applicable"} and state.get("evaluation_state") not in {
+            "executed", "evidence_reused", "error"}:
+        return "AQ-LAYOUT-01: generated-artifact Jev execution state is missing or invalid"
+    if state.get("status") == "evaluated" and state.get("evaluation_state") == "error":
+        return "AQ-LAYOUT-01: generated-artifact Jev evaluated state conflicts with execution error"
     if supported and state.get("status") == "scanned_no_candidates":
         return "AQ-LAYOUT-01: generated-artifact Jev candidate scan was omitted"
     if state.get("status") in {"evaluated", "connection_failed"}:
@@ -150,6 +165,7 @@ def validate_readback(scan: dict[str, Any], state: dict[str, Any]) -> str | None
                 jev_post_render.validate_request(request)
                 jev_post_render.validate_schema(receipt, "receipt")
                 expected_ids = {item["id"] for item in supported}
+                expected_scope = "candidates" if supported else "whole_artifact"
                 receipt_mode = receipt.get("execution_mode")
                 provider_invoked = receipt.get("provider_invoked") is True
                 formal_provider_evidence = (
@@ -157,8 +173,21 @@ def validate_readback(scan: dict[str, Any], state: dict[str, Any]) -> str | None
                     and receipt.get("reason_code") == "ok"
                     and receipt.get("status") in {"accepted", "uncertain", "repair_required"}
                 )
+                whole_artifact_valid = (
+                    request.get("binding", {}).get("review_scope", "candidates") == expected_scope
+                    and state.get("review_scope", expected_scope) == expected_scope
+                    and ((bool(supported) and "whole_artifact" not in request)
+                         or (not supported and isinstance(request.get("whole_artifact"), dict)
+                             and request["whole_artifact"].get("scope") == "all_pages_structural_review"
+                             and request["whole_artifact"].get("metrics_sha256")
+                             == jev_post_render.digest(request["whole_artifact"].get("metrics"))))
+                    and ((bool(supported) and "whole_artifact_review" not in receipt)
+                         or (not supported and receipt.get("status") == "unresolved"
+                             or (not supported and isinstance(receipt.get("whole_artifact_review"), dict))))
+                )
                 if ({candidate["id"] for candidate in request.get("candidates", [])} != expected_ids
                         or state.get("raw_scan") != request.get("binding", {}).get("scan")
+                        or not whole_artifact_valid
                         or receipt_mode not in {"fixture", "live"}
                         or receipt.get("request_sha256") != jev_post_render.digest(request)
                         or state.get("provider_status") != receipt.get("status")

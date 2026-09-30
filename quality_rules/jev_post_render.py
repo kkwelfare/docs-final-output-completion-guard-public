@@ -17,12 +17,18 @@ import fitz
 import os
 import time
 import math
+import statistics
 from . import jev_overlap, jev_glyph_locale
 
 ROOT = Path(__file__).resolve().parents[1]
 ROUTE = "post-render-jev-structural"
 MAX_JSON_BYTES = 256_000
 MAX_WIRE_BYTES = 32_000
+MAX_WHOLE_ARTIFACT_PAGES = 256
+MAX_WHOLE_ARTIFACT_LINES = 40_000
+MAX_WHOLE_ARTIFACT_CHARACTERS = 2_000_000
+WHOLE_ARTIFACT_CRITERION = "whole_artifact_structure"
+WHOLE_ARTIFACT_CONFIDENCE_FLOOR = 0.5
 # No endpoint guessing, automatic fallback, or retries. Locale is a proxy-only
 # advisory judgment, not visual perception or semantic proofreading.
 RULE_CRITERIA = {
@@ -88,7 +94,7 @@ def candidate_digest(candidates: list[dict]) -> str:
     return digest(candidates)
 
 
-def scan_candidates(scan: dict) -> list[dict]:
+def scan_candidates(scan: dict, *, allow_empty: bool = False) -> list[dict]:
     """Recount raw issues and reject ambiguous/malformed classifications."""
     if scan.get("schema_version") != "docs-layout-typography-scan-3" or scan.get("measurement_basis") != "pdf_points":
         raise PostRenderError("invalid_request")
@@ -104,7 +110,7 @@ def scan_candidates(scan: dict) -> list[dict]:
         raise PostRenderError("identity_drift")
     if "REVIEW_CANDIDATE" in scan and scan["REVIEW_CANDIDATE"] != issues:
         raise PostRenderError("identity_drift")
-    if not issues or len({i.get("id") for i in issues}) != len(issues):
+    if (not issues and not allow_empty) or len({i.get("id") for i in issues}) != len(issues):
         raise PostRenderError("invalid_request")
     return issues
 
@@ -122,13 +128,28 @@ def validate_request(request: dict) -> dict:
     for key, expected in (("artifact_set_id", b["artifact_set_id"]), ("producer_task_id", b["producer"]["task_id"]), ("producer_run_id", b["producer"]["run_id"])):
         if key in scan and scan[key] != expected:
             raise PostRenderError("identity_drift")
-    raw = scan_candidates(scan)
+    review_scope = b.get("review_scope", "candidates")
+    if review_scope not in {"candidates", "whole_artifact"}:
+        raise PostRenderError("invalid_request")
+    raw = scan_candidates(scan, allow_empty=review_scope == "whole_artifact")
     candidates = request["candidates"]
     if b["candidate_set_digest"] != candidate_digest(candidates):
         raise PostRenderError("identity_drift")
     by_id = {c["id"]: c for c in candidates}
     if len(by_id) != len(candidates) or set(by_id) != {c["id"] for c in raw}:
         raise PostRenderError("identity_drift")
+    if not raw:
+        whole = request.get("whole_artifact")
+        if review_scope != "whole_artifact" or not isinstance(whole, dict):
+            raise PostRenderError("invalid_request")
+        metrics = measure_whole_artifact(Path(b["artifact"]["path"]))
+        if (whole.get("scope") != "all_pages_structural_review"
+                or whole.get("metrics") != metrics
+                or whole.get("metrics_sha256") != digest(metrics)):
+            raise PostRenderError("identity_drift")
+        return scan
+    if review_scope != "candidates" or "whole_artifact" in request:
+        raise PostRenderError("invalid_request")
     for row in raw:
         c = by_id[row["id"]]
         if c["rule"] not in RULE_CRITERIA or c["criteria"] != RULE_CRITERIA[c["rule"]]:
@@ -293,12 +314,143 @@ def measure_candidate(artifact: Path, candidate: dict) -> dict:
     return metrics
 
 
+def _numeric_summary(values: list[float], *, digits: int = 4) -> dict[str, float] | None:
+    if not values:
+        return None
+    ordered = sorted(float(value) for value in values)
+    return {
+        "minimum": round(ordered[0], digits),
+        "median": round(statistics.median(ordered), digits),
+        "maximum": round(ordered[-1], digits),
+    }
+
+
+def measure_whole_artifact(artifact: Path) -> dict[str, Any]:
+    """Summarize every PDF page using bounded body-free structural metrics.
+
+    Text is inspected transiently only to derive counts and line geometry; no
+    literal text or page pixels enter the returned metrics or provider wire.
+    The per-page digest binds the all-page measurement set without sending
+    unbounded page-level records.
+    """
+    page_rows: list[dict[str, Any]] = []
+    widths: list[float] = []
+    heights: list[float] = []
+    page_line_counts: list[float] = []
+    page_character_counts: list[float] = []
+    page_coverage: list[float] = []
+    line_gaps: list[float] = []
+    font_sizes: list[float] = []
+    total_lines = total_spans = total_characters = 0
+    empty_pages = 0
+    rotated_pages = 0
+    size_pairs: set[tuple[float, float]] = set()
+    try:
+        with fitz.open(artifact) as doc:
+            if not doc.is_pdf or doc.is_encrypted or len(doc) < 1:
+                raise PostRenderError("invalid_request")
+            if len(doc) > MAX_WHOLE_ARTIFACT_PAGES:
+                raise PostRenderError("structural_metrics_limit_exceeded")
+            for page_number, page in enumerate(doc, start=1):
+                page_rect = page.rect
+                width, height = float(page_rect.width), float(page_rect.height)
+                if not math.isfinite(width) or not math.isfinite(height) or width <= 0 or height <= 0:
+                    raise PostRenderError("invalid_request")
+                widths.append(width)
+                heights.append(height)
+                size_pairs.add((round(width, 4), round(height, 4)))
+                rotation = int(page.rotation)
+                rotated_pages += int(rotation != 0)
+                page_lines: list[tuple[fitz.Rect, list[dict[str, Any]]]] = []
+                page_spans = 0
+                page_characters = 0
+                data = page.get_text("dict")
+                for block in data.get("blocks", []):
+                    for line in block.get("lines", []):
+                        box = fitz.Rect(line["bbox"])
+                        spans = line.get("spans", [])
+                        page_lines.append((box, spans))
+                        page_spans += len(spans)
+                        for span in spans:
+                            text = span.get("text", "")
+                            page_characters += len(text) if isinstance(text, str) else 0
+                            size = span.get("size")
+                            if isinstance(size, (int, float)) and not isinstance(size, bool) and math.isfinite(size) and size > 0:
+                                font_sizes.append(float(size))
+                page_lines.sort(key=lambda item: (round(item[0].y0, 4), round(item[0].x0, 4)))
+                page_count_lines = len(page_lines)
+                total_lines += page_count_lines
+                total_spans += page_spans
+                total_characters += page_characters
+                if total_lines > MAX_WHOLE_ARTIFACT_LINES or total_characters > MAX_WHOLE_ARTIFACT_CHARACTERS:
+                    raise PostRenderError("structural_metrics_limit_exceeded")
+                if not page_lines:
+                    empty_pages += 1
+                page_gaps = [round(page_lines[index + 1][0].y0 - page_lines[index][0].y1, 4)
+                             for index in range(len(page_lines) - 1)]
+                line_gaps.extend(page_gaps)
+                intervals = sorted((max(float(page_rect.y0), box.y0), min(float(page_rect.y1), box.y1))
+                                   for box, _ in page_lines)
+                covered = 0.0
+                covered_end = float(page_rect.y0)
+                for low, high in intervals:
+                    covered += max(0.0, high - max(low, covered_end))
+                    covered_end = max(covered_end, high)
+                coverage = min(1.0, max(0.0, covered / height))
+                page_coverage.append(coverage)
+                page_line_counts.append(float(page_count_lines))
+                page_character_counts.append(float(page_characters))
+                if page_lines:
+                    boxes = [box for box, _ in page_lines]
+                    text_bbox = [round(min(box.x0 for box in boxes), 4),
+                                 round(min(box.y0 for box in boxes), 4),
+                                 round(max(box.x1 for box in boxes), 4),
+                                 round(max(box.y1 for box in boxes), 4)]
+                else:
+                    text_bbox = None
+                page_rows.append({
+                    "page": page_number,
+                    "size_pt": [round(width, 4), round(height, 4)],
+                    "rotation": rotation,
+                    "line_count": page_count_lines,
+                    "span_count": page_spans,
+                    "character_count": page_characters,
+                    "text_bbox_pdf_points": text_bbox,
+                    "vertical_line_coverage": round(coverage, 6),
+                    "line_gap_pt": _numeric_summary(page_gaps),
+                })
+    except PostRenderError:
+        raise
+    except Exception as exc:
+        raise PostRenderError("invalid_request") from exc
+    return {
+        "schema_version": "docs-jev-whole-artifact-structure-1",
+        "basis": "pdf_points_body_and_pixels_excluded",
+        "page_count": len(page_rows),
+        "page_metrics_sha256": digest(page_rows),
+        "page_size_variant_count": len(size_pairs),
+        "rotated_page_count": rotated_pages,
+        "empty_text_page_count": empty_pages,
+        "line_count_total": total_lines,
+        "span_count_total": total_spans,
+        "character_count_total": total_characters,
+        "page_width_pt": _numeric_summary(widths),
+        "page_height_pt": _numeric_summary(heights),
+        "page_line_count": _numeric_summary(page_line_counts, digits=2),
+        "page_character_count": _numeric_summary(page_character_counts, digits=2),
+        "page_vertical_line_coverage": _numeric_summary(page_coverage, digits=6),
+        "line_gap_pt": _numeric_summary(line_gaps),
+        "font_size_pt": _numeric_summary(font_sizes),
+    }
+
+
 def build_request(*, artifact: Path, raw_scan: Path, artifact_set_id: str,
                   producer: dict, reviewer: dict, allow_live_provider: bool = False,
                   timeout_seconds: float = 15) -> dict:
     scan=read_json(raw_scan)
     candidates=[]
-    for row in scan_candidates(scan):
+    raw_candidates = scan_candidates(scan, allow_empty=True)
+    for row in raw_candidates:
         if row["rule"] not in RULE_CRITERIA:
             raise PostRenderError("invalid_request")
         c={k:copy.deepcopy(row[k]) for k in ("id","rule","page","bbox_pdf_points")}
@@ -311,13 +463,21 @@ def build_request(*, artifact: Path, raw_scan: Path, artifact_set_id: str,
                  criteria=list(RULE_CRITERIA[row["rule"]]))
         c["metrics"] = measure_candidate(artifact, c)
         candidates.append(c)
+    review_scope = "candidates" if candidates else "whole_artifact"
+    binding = {"artifact":{"path":str(artifact.resolve()),"sha256":file_hash(artifact)},
+               "scan":{"path":str(raw_scan.resolve()),"sha256":file_hash(raw_scan)},
+               "artifact_set_id":artifact_set_id,"producer":producer,
+               "candidate_set_digest":candidate_digest(candidates), "review_scope":review_scope}
     request={"schema_version":"docs-jev-post-render-request-1", "enabled":True,
-        "binding":{"artifact":{"path":str(artifact.resolve()),"sha256":file_hash(artifact)},
-                   "scan":{"path":str(raw_scan.resolve()),"sha256":file_hash(raw_scan)},
-                   "artifact_set_id":artifact_set_id,"producer":producer,
-                   "candidate_set_digest":candidate_digest(candidates)},
+        "binding":binding,
         "reviewer":reviewer,"provider":"typesafe-system-one","model":"jev-latest",
         "allow_live_provider":allow_live_provider,"timeout_seconds":timeout_seconds,"candidates":candidates}
+    if review_scope == "whole_artifact":
+        metrics = measure_whole_artifact(artifact)
+        request["whole_artifact"] = {
+            "scope": "all_pages_structural_review", "metrics": metrics,
+            "metrics_sha256": digest(metrics),
+        }
     validate_request(request)
     return request
 
@@ -373,7 +533,10 @@ def build_wire(request: dict) -> tuple[dict, list[dict]]:
     wire={"schema_version":"docs-jev-post-render-wire-1","request_sha256":digest(request),
           "artifact_sha256":b["artifact"]["sha256"],"scan_sha256":b["scan"]["sha256"],
           "artifact_set_id":b["artifact_set_id"],"producer":b["producer"],"reviewer":request["reviewer"],
-          "candidate_set_digest":b["candidate_set_digest"],"advisory_only":True,"candidates":rows}
+          "candidate_set_digest":b["candidate_set_digest"],"review_scope":b.get("review_scope", "candidates"),
+          "advisory_only":True,"candidates":rows}
+    if "whole_artifact" in request:
+        wire["whole_artifact"] = copy.deepcopy(request["whole_artifact"])
     if len(canonical(wire)) > MAX_WIRE_BYTES:
         raise PostRenderError("invalid_request")
     build_provider_payload(wire)  # Include JSON escaping and questions in the cap.
@@ -385,6 +548,30 @@ def build_provider_payload(wire: dict) -> tuple[dict, list[tuple[str, str, str]]
     if len(canonical(wire)) > MAX_WIRE_BYTES:
         raise PostRenderError("invalid_request")
     questions={}; mapping=[]
+    if wire.get("review_scope") == "whole_artifact":
+        whole = wire.get("whole_artifact")
+        if (not isinstance(whole, dict) or whole.get("scope") != "all_pages_structural_review"
+                or whole.get("metrics_sha256") != digest(whole.get("metrics"))):
+            raise PostRenderError("invalid_request")
+        key = "artifact_q0"
+        questions[key] = {
+            "type": "choice",
+            "instructions": (
+                "Review only the supplied hash-bound, all-page PDF structural summary. "
+                "It contains page geometry, text-line/span/character counts, line-gap and "
+                "vertical-coverage/font-size aggregates; no page body or pixels are available. "
+                "Assess only whether the measured whole-artifact structure shows an established "
+                "structural concern. Do not infer visual appearance, semantics, readability, "
+                "or correctness; choose uncertain when these bounded measurements do not establish a conclusion."
+            ),
+            "choices": ["pass", "fail", "uncertain"],
+            "criteria": {
+                "pass": "The supplied all-page structural measurements establish no structural concern.",
+                "fail": "The supplied all-page structural measurements establish a structural concern.",
+                "uncertain": "The supplied structural measurements do not establish a conclusion.",
+            },
+        }
+        mapping.append((key, "", WHOLE_ARTIFACT_CRITERION))
     for i,c in enumerate(wire["candidates"]):
         for j,criterion in enumerate(c["criteria"]):
             key=f"c{i}_q{j}"
@@ -432,6 +619,35 @@ def text_provider(wire: dict, timeout: float) -> dict:
                 or any(ord(ch) < 32 or 0x7f <= ord(ch) <= 0x9f
                        or ch in "\u2028\u2029" for ch in model)):
             raise PostRenderError("malformed_response")
+    if wire.get("review_scope") == "whole_artifact":
+        key, _, criterion = mapping[0]
+        answer = answers[key]
+        if not isinstance(answer, dict) or answer.get("choice") not in set(questions[key]["choices"]):
+            raise PostRenderError("malformed_response")
+        confidence = answer.get("confidence")
+        if isinstance(confidence, bool) or not isinstance(confidence, (float, int)) or not math.isfinite(confidence) or not 0 <= confidence <= 1:
+            raise PostRenderError("malformed_response")
+        if "probabilities" in answer:
+            probs = answer["probabilities"]
+            allowed = set(questions[key]["choices"])
+            if (not isinstance(probs, dict) or set(probs) != allowed
+                    or any(isinstance(p, bool) or not isinstance(p, (int, float))
+                           or not math.isfinite(p) or not 0 <= p <= 1 for p in probs.values())):
+                raise PostRenderError("malformed_response")
+        status = answer["choice"]
+        if float(confidence) < WHOLE_ARTIFACT_CONFIDENCE_FLOOR:
+            status = "uncertain"
+        result = {"criterion": criterion, "status": status}
+        return {
+            "schema_version": "docs-jev-post-render-response-1",
+            "request_sha256": wire["request_sha256"],
+            "reviews": [],
+            "whole_artifact_review": {
+                "disposition": disposition({status}),
+                "criteria_results": [result],
+                "confidence": float(confidence),
+            },
+        }
     reviews={c["id"]:{"candidate_id":c["id"],"disposition":"accepted","criteria_results":[]} for c in wire["candidates"]}
     for key,cid,criterion in mapping:
         answer=answers[key]
@@ -445,7 +661,8 @@ def text_provider(wire: dict, timeout: float) -> dict:
             probs=answer["probabilities"]
             if not isinstance(probs,dict) or set(probs)!=allowed or any(isinstance(p,bool) or not isinstance(p,(int,float)) or not math.isfinite(p) or not 0<=p<=1 for p in probs.values()):
                 raise PostRenderError("malformed_response")
-        reviews[cid]["criteria_results"].append({"criterion":criterion,"status":answer["choice"]})
+        status = answer["choice"] if float(confidence) >= WHOLE_ARTIFACT_CONFIDENCE_FLOOR else "uncertain"
+        reviews[cid]["criteria_results"].append({"criterion":criterion,"status":status})
     for r in reviews.values():
         values={v["status"] for v in r["criteria_results"]}
         r["disposition"]=disposition(values)
@@ -479,6 +696,28 @@ def _validate_reviews(response: dict, request: dict) -> str:
     if response["request_sha256"] != digest(request):
         raise PostRenderError("malformed_response")
     rows = response["reviews"]
+    if request["binding"].get("review_scope") == "whole_artifact":
+        whole = response.get("whole_artifact_review")
+        if rows or not isinstance(whole, dict):
+            raise PostRenderError("malformed_response")
+        results = whole.get("criteria_results")
+        if (not isinstance(results, list) or len(results) != 1
+                or results[0].get("criterion") != WHOLE_ARTIFACT_CRITERION):
+            raise PostRenderError("malformed_response")
+        result = results[0]
+        status = result.get("status")
+        confidence = whole.get("confidence")
+        if (status not in {"pass", "fail", "uncertain"}
+                or isinstance(confidence, bool) or not isinstance(confidence, (float, int))
+                or not math.isfinite(confidence) or not 0 <= confidence <= 1
+                or (float(confidence) < WHOLE_ARTIFACT_CONFIDENCE_FLOOR and status != "uncertain")):
+            raise PostRenderError("malformed_response")
+        expected = disposition({status})
+        if whole.get("disposition") != expected:
+            raise PostRenderError("malformed_response")
+        return expected
+    if "whole_artifact_review" in response:
+        raise PostRenderError("malformed_response")
     by_id = {r["candidate_id"]: r for r in rows}
     if len(by_id) != len(rows) or set(by_id) != {c["id"] for c in request["candidates"]}:
         raise PostRenderError("malformed_response")
@@ -525,8 +764,10 @@ def evaluate(request: dict, *, fixture_adapter: Callable | None = None) -> dict:
         status = _validate_reviews(response, request)
         validate_request(request)  # detect artifact/scan/image mutation during call
         receipt.update(status=status, reason_code="ok", reviews=copy.deepcopy(response["reviews"]))
+        if "whole_artifact_review" in response:
+            receipt["whole_artifact_review"] = copy.deepcopy(response["whole_artifact_review"])
     except PostRenderError as exc:
-        receipt["reason_code"] = str(exc) if str(exc) in {"identity_drift", "invalid_request", "hard_fail", "malformed_response", "insufficient_evidence"} else "invalid_request"
+        receipt["reason_code"] = str(exc) if str(exc) in {"identity_drift", "invalid_request", "hard_fail", "malformed_response", "insufficient_evidence", "structural_metrics_limit_exceeded"} else "invalid_request"
     except jev_overlap.JevOverlapError as exc:
         receipt["reason_code"] = "timeout" if exc.reason == "timeout" else "provider_unavailable" if exc.reason == "credential_unavailable" else "malformed_response" if exc.reason == "malformed_response" else "provider_error"
     except TimeoutError:
@@ -572,6 +813,8 @@ def consume(config: dict, *, artifact: Path, artifact_set_id: str | None,
             raise PostRenderError("identity_drift")
         response = {"schema_version": "docs-jev-post-render-response-1", "request_sha256": receipt["request_sha256"],
                     "reviews": receipt["reviews"]}
+        if "whole_artifact_review" in receipt:
+            response["whole_artifact_review"] = copy.deepcopy(receipt["whole_artifact_review"])
         if _validate_reviews(response, request) != "accepted":
             raise PostRenderError("malformed_response")
         _, measurements = build_wire(request)

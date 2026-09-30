@@ -546,6 +546,10 @@ def _validate_scan_readback(
 ) -> str | None:
     """Recount scanner output and re-read the review instead of trusting status."""
     if generated_jev_required:
+        # This is identity/state readback only: Jev classification remains advisory.
+        # Deterministic scan checks and the existing owner/completion path below
+        # retain acceptance authority; provider uncertainty/error is recorded, not
+        # translated into either a pass or an automatic stop.
         generated_state = scan.get("generated_artifact_jev")
         generated_error = generated_artifact_jev_rules.validate_readback(scan, generated_state)
         if generated_error:

@@ -77,6 +77,12 @@
         "candidate_set_digest": {
           "type": "string",
           "pattern": "^[a-f0-9]{64}$"
+        },
+        "review_scope": {
+          "enum": [
+            "candidates",
+            "whole_artifact"
+          ]
         }
       },
       "required": [
@@ -785,10 +791,104 @@
           }
         ]
       },
-      "minItems": 1,
+      "minItems": 0,
       "maxItems": 20
+    },
+    "whole_artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "const": "all_pages_structural_review"
+        },
+        "metrics": {
+          "$ref": "#/$defs/wholeArtifactMetrics"
+        },
+        "metrics_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "scope",
+        "metrics",
+        "metrics_sha256"
+      ]
     }
   },
+  "$defs": {
+    "numericSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "minimum": {"type": "number", "minimum": -1000000, "maximum": 1000000},
+        "median": {"type": "number", "minimum": -1000000, "maximum": 1000000},
+        "maximum": {"type": "number", "minimum": -1000000, "maximum": 1000000}
+      },
+      "required": ["minimum", "median", "maximum"]
+    },
+    "coverageSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "minimum": {"type": "number", "minimum": 0, "maximum": 1},
+        "median": {"type": "number", "minimum": 0, "maximum": 1},
+        "maximum": {"type": "number", "minimum": 0, "maximum": 1}
+      },
+      "required": ["minimum", "median", "maximum"]
+    },
+    "wholeArtifactMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {"const": "docs-jev-whole-artifact-structure-1"},
+        "basis": {"const": "pdf_points_body_and_pixels_excluded"},
+        "page_count": {"type": "integer", "minimum": 1, "maximum": 256},
+        "page_metrics_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "page_size_variant_count": {"type": "integer", "minimum": 1, "maximum": 256},
+        "rotated_page_count": {"type": "integer", "minimum": 0, "maximum": 256},
+        "empty_text_page_count": {"type": "integer", "minimum": 0, "maximum": 256},
+        "line_count_total": {"type": "integer", "minimum": 0, "maximum": 40000},
+        "span_count_total": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "character_count_total": {"type": "integer", "minimum": 0, "maximum": 2000000},
+        "page_width_pt": {"anyOf": [{"$ref": "#/$defs/numericSummary"}, {"type": "null"}]},
+        "page_height_pt": {"anyOf": [{"$ref": "#/$defs/numericSummary"}, {"type": "null"}]},
+        "page_line_count": {"anyOf": [{"$ref": "#/$defs/numericSummary"}, {"type": "null"}]},
+        "page_character_count": {"anyOf": [{"$ref": "#/$defs/numericSummary"}, {"type": "null"}]},
+        "page_vertical_line_coverage": {"anyOf": [{"$ref": "#/$defs/coverageSummary"}, {"type": "null"}]},
+        "line_gap_pt": {"anyOf": [{"$ref": "#/$defs/numericSummary"}, {"type": "null"}]},
+        "font_size_pt": {"anyOf": [{"$ref": "#/$defs/numericSummary"}, {"type": "null"}]}
+      },
+      "required": [
+        "schema_version", "basis", "page_count", "page_metrics_sha256",
+        "page_size_variant_count", "rotated_page_count", "empty_text_page_count",
+        "line_count_total", "span_count_total", "character_count_total",
+        "page_width_pt", "page_height_pt", "page_line_count", "page_character_count",
+        "page_vertical_line_coverage", "line_gap_pt", "font_size_pt"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "binding": {"properties": {"review_scope": {"const": "whole_artifact"}}}
+        },
+        "required": ["binding"]
+      },
+      "then": {
+        "properties": {"candidates": {"maxItems": 0}},
+        "required": ["whole_artifact"]
+      },
+      "else": {
+        "properties": {
+          "binding": {"properties": {"review_scope": {"const": "candidates"}}},
+          "candidates": {"minItems": 1}
+        },
+        "not": {"required": ["whole_artifact"]}
+      }
+    }
+  ],
   "required": [
     "schema_version",
     "enabled",

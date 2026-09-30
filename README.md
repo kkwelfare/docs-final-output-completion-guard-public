@@ -26,11 +26,15 @@ The portable route accepts a JSON manifest with schema `docs-host-adapter-manife
 
 The default manifest-free route uses the bundled checker and `FakeRenderer`. The adapter does not discover credentials, infer a task, start a renderer, or perform network I/O. Real renderer integrations remain host-owned and must satisfy the same renderer contract.
 
+## Plugin generated-artifact review
+
+For eligible PDFs, the plugin's `generated_artifact_jev.run` route makes one live evaluation attempt. When candidate count is zero, it uses a whole-artifact structural summary. Bound evidence is reused only while its artifact identity and supporting state remain unchanged. The owner scan stays byte-stable; execution details are recorded separately. Failure, uncertainty, or low confidence is not a pass: deterministic checks and the existing owner/completion path retain acceptance authority. The request is metrics-only; it does not include document body text or page pixels.
+
 ## Format and evidence boundary
 
 The public adapters inspect UTF-8 text/Markdown, JSON, DOCX, PPTX, and PDF inputs. Text inputs are checked by the canonical local checker; JSON and container inputs receive structural checks and require a host renderer for a real document render. The evidence receipt records paths, formats, counts, hashes, rule IDs, and statuses only. It rejects raw text/body/content fields, binary payloads, provider payload bodies, and image transport. The candidate never sends images to a provider.
 
-Jev/provider review is optional advisory context. It is disabled by default, is never authoritative, and cannot override a deterministic local block. Portable tests and the host integration readback use no provider call.
+For the separate portable producer route, provider review remains disabled by default and is advisory-only when explicitly opted in; it cannot override a deterministic local block. Portable tests and the host integration readback use no provider call.
 
 ## External dependency setup
 
