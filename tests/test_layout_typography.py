@@ -25,6 +25,15 @@ def _load_checker():
     return module
 
 
+def _load_guard():
+    spec = importlib.util.spec_from_file_location("generated_jev_completion_guard", ROOT / "__init__.py")
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def _pdf(path: Path, draw) -> Path:
     doc = fitz.open()
     page = doc.new_page(width=300, height=180)
@@ -72,6 +81,26 @@ def test_normal_teaching_material_fixture_passes(tmp_path):
     pdf = _pdf(tmp_path / "normal-teaching-material.pdf", lambda page: (page.insert_text((30, 40), "Step 1: prepare"), page.insert_text((30, 75), "Step 2: confirm")))
     result = layout_typography.scan_pdf(pdf, {"minimum_gap_px": 2})
     assert result["status"] == "pass" and result["issues"] == []
+
+
+def test_badge_text_interference_candidate_excludes_enclosed_label_and_ignores_distant_text(tmp_path):
+    def draw(page):
+        page.draw_circle((50, 50), 12, color=(0, 0, 0), fill=(0.9, 0.9, 0.9))
+        page.insert_text((50, 53), "1", fontsize=8)  # enclosed badge label
+        page.insert_text((62, 53), "A", fontsize=9)  # touches the circle boundary
+    pdf = _pdf(tmp_path / "badge-interference.pdf", draw)
+    result = layout_typography.scan_pdf(pdf, {})
+    candidates = [issue for issue in result["issues"] if issue["rule"] == "badge_text_interference_candidate"]
+    assert len(candidates) == 1
+    assert candidates[0]["semantic_role"] == "unspecified"
+    assert candidates[0]["circle_bbox_pdf_points"] == [38.0, 38.0, 62.0, 62.0]
+
+    distant = _pdf(tmp_path / "badge-distant-text.pdf", lambda page: (
+        page.draw_circle((50, 50), 12, color=(0, 0, 0), fill=(0.9, 0.9, 0.9)),
+        page.insert_text((100, 53), "A", fontsize=9),
+    ))
+    assert not any(issue["rule"] == "badge_text_interference_candidate"
+                   for issue in layout_typography.scan_pdf(distant, {})["issues"])
 
 
 def test_overlap_fixture_fails_targeted_rule(tmp_path):
@@ -251,6 +280,76 @@ def test_receipt_builder_blocks_layout_fixture_through_actual_path(tmp_path):
     evidence = candidate["render_evidence"]
     assert Path(evidence["path"]).is_file() and evidence["sha256"]
     assert evidence["page"] == 1 and evidence["bbox_pdf_points"] and evidence["bbox_render_pixels"]
+
+
+def test_generated_artifact_jev_runs_without_legacy_opt_in_and_guard_reads_back(tmp_path):
+    checker = _load_checker()
+    guard = _load_guard()
+    normal_pdf = _pdf(tmp_path / "normal-no-candidate.pdf", lambda page: page.insert_text((30, 40), "Normal page"))
+    disabled = {"enabled": False,
+                "request": {"path": str(tmp_path / "unused-request.json"), "sha256": "0" * 64},
+                "receipt": {"path": str(tmp_path / "unused-receipt.json"), "sha256": "0" * 64}}
+    normal_contract = {
+        "artifact_kind": "pdf", "artifacts": [str(normal_pdf)],
+        "artifact_quality": {"required": True, "layout_typography": {
+            "required": True, "minimum_gap_px": 0, "jev_post_render_review": disabled}},
+    }
+    normal_path = tmp_path / "normal-contract.json"
+    normal_path.write_text(json.dumps(normal_contract), encoding="utf-8")
+    normal_receipt, _ = checker.build_receipt(normal_path, evidence_dir=tmp_path / "normal-evidence")
+    normal_rule = next(rule for rule in normal_receipt["entries"][0]["rules"] if rule["id"] == "AQ-LAYOUT-01")
+    normal_scan = json.loads(Path(normal_rule["evidence"]["path"]).read_text(encoding="utf-8"))
+    assert normal_scan["generated_artifact_jev"]["status"] == "scanned_no_candidates"
+    assert guard._validate_scan_readback(normal_scan, artifact=normal_pdf, generated_jev_required=True) is None
+
+    badge_pdf = _pdf(tmp_path / "badge-for-route.pdf", lambda page: (
+        page.draw_circle((50, 50), 12, color=(0, 0, 0), fill=(0.9, 0.9, 0.9)),
+        page.insert_text((50, 53), "1", fontsize=8),
+        page.insert_text((62, 53), "A", fontsize=9),
+    ))
+    contract = {
+        "artifact_kind": "pdf", "artifacts": [str(badge_pdf)],
+        "artifact_quality": {"required": True, "layout_typography": {
+            "required": True, "minimum_gap_px": 0, "narrow_card_exemption_ratio": 0,
+            "jev_post_render_review": disabled}},
+    }
+    contract_path = tmp_path / "badge-contract.json"
+    contract_path.write_text(json.dumps(contract), encoding="utf-8")
+    identity = {
+        "artifact_set_id": "a" * 64,
+        "producer": {"task_id": "fixture-producer", "run_id": 1},
+        "reviewer": {"task_id": "fixture-reviewer", "run_id": 2},
+    }
+
+    def fixture_adapter(answer):
+        def respond(wire, timeout):
+            if answer == "provider_error":
+                raise RuntimeError("mock provider unavailable")
+            disposition = {"pass": "accepted", "uncertain": "uncertain", "fail": "repair_required"}[answer]
+            reviews = [{"candidate_id": candidate["id"], "disposition": disposition,
+                        "criteria_results": [{"criterion": criterion, "status": answer}
+                                             for criterion in candidate["criteria"]]}
+                       for candidate in wire["candidates"]]
+            return {"schema_version": "docs-jev-post-render-response-1",
+                    "request_sha256": wire["request_sha256"], "reviews": reviews}
+        return respond
+
+    for index, outcome in enumerate(("pass", "uncertain", "fail", "provider_error")):
+        receipt, _ = checker.build_receipt(
+            contract_path, evidence_dir=tmp_path / f"badge-evidence-{index}",
+            jev_fixture_identity=identity, jev_fixture_adapter=fixture_adapter(outcome),
+        )
+        layout_rule = next(rule for rule in receipt["entries"][0]["rules"] if rule["id"] == "AQ-LAYOUT-01")
+        scan = json.loads(Path(layout_rule["evidence"]["path"]).read_text(encoding="utf-8"))
+        route = scan["generated_artifact_jev"]
+        assert route["formal_provider_evidence"] is False
+        assert route["status"] == ("connection_failed" if outcome == "provider_error" else "evaluated")
+        if outcome != "provider_error":
+            assert route["provider_status"] == {"pass": "accepted", "uncertain": "uncertain", "fail": "repair_required"}[outcome]
+        # Fixture-only acceptance/uncertainty cannot bypass the owner's manual
+        # candidate disposition in the actual completion readback path.
+        error = guard._validate_scan_readback(scan, artifact=badge_pdf, generated_jev_required=True)
+        assert error == "AQ-LAYOUT-01: review attachment is missing"
 
 
 def test_pdf_layout_contract_missing_false_and_non_dict_fail_closed(tmp_path):

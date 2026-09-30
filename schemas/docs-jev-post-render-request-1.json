@@ -277,14 +277,28 @@
               "region_normalization": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["epsilon_pt", "normalized_bbox_pdf_points", "applied"],
+                "required": [
+                  "epsilon_pt",
+                  "normalized_bbox_pdf_points",
+                  "applied"
+                ],
                 "properties": {
-                  "epsilon_pt": {"const": 0.005},
-                  "normalized_bbox_pdf_points": {
-                    "type": "array", "minItems": 4, "maxItems": 4,
-                    "items": {"type": "number", "minimum": 0, "maximum": 1000000}
+                  "epsilon_pt": {
+                    "const": 0.005
                   },
-                  "applied": {"type": "boolean"}
+                  "normalized_bbox_pdf_points": {
+                    "type": "array",
+                    "minItems": 4,
+                    "maxItems": 4,
+                    "items": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1000000
+                    }
+                  },
+                  "applied": {
+                    "type": "boolean"
+                  }
                 }
               },
               "basis": {
@@ -650,6 +664,48 @@
                   "local_render",
                   "evidence_sufficient"
                 ]
+              },
+              "badge_text_interference": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "circle_bbox_pdf_points": {
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    "minItems": 4,
+                    "maxItems": 4
+                  },
+                  "outside_text_bbox_pdf_points": {
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    "minItems": 4,
+                    "maxItems": 4
+                  },
+                  "expanded_contact_region_pt": {
+                    "const": 5.0
+                  },
+                  "text_intersects_circle_bbox": {
+                    "type": "boolean"
+                  },
+                  "semantic_role": {
+                    "const": "unspecified"
+                  }
+                },
+                "required": [
+                  "circle_bbox_pdf_points",
+                  "outside_text_bbox_pdf_points",
+                  "expanded_contact_region_pt",
+                  "text_intersects_circle_bbox",
+                  "semantic_role"
+                ]
               }
             },
             "required": [
@@ -659,6 +715,26 @@
               "line_order_gaps",
               "vertical_line_coverage"
             ]
+          },
+          "circle_bbox_pdf_points": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": -1000000,
+              "maximum": 1000000
+            },
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "text_bbox_pdf_points": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": -1000000,
+              "maximum": 1000000
+            },
+            "minItems": 4,
+            "maxItems": 4
           }
         },
         "required": [

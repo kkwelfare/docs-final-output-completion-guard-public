@@ -60,6 +60,15 @@ if _visual_spec is None or _visual_spec.loader is None:
 jev_post_render_rules = importlib.util.module_from_spec(_visual_spec)
 sys.modules[_visual_spec.name] = jev_post_render_rules
 _visual_spec.loader.exec_module(jev_post_render_rules)
+_generated_jev_spec = importlib.util.spec_from_file_location(
+    f"{_quality_rules_namespace}.generated_artifact_jev",
+    Path(__file__).parent / "quality_rules" / "generated_artifact_jev.py",
+)
+if _generated_jev_spec is None or _generated_jev_spec.loader is None:
+    raise ImportError("generated-artifact Jev route is unavailable")
+generated_artifact_jev_rules = importlib.util.module_from_spec(_generated_jev_spec)
+sys.modules[_generated_jev_spec.name] = generated_artifact_jev_rules
+_generated_jev_spec.loader.exec_module(generated_artifact_jev_rules)
 
 SCHEMA_VERSION = "docs-final-output-receipt-1"
 ARTIFACT_QUALITY_SCHEMA_VERSION = "docs-artifact-quality-receipt-1"
@@ -533,9 +542,14 @@ def _validate_scan_readback(
     scan: dict[str, Any], *, review_path: Path | None = None,
     artifact_set_id: str | None = None,
     visual_config: dict[str, Any] | None = None, artifact: Path | None = None,
-    producer: dict[str, Any] | None = None,
+    producer: dict[str, Any] | None = None, generated_jev_required: bool = False,
 ) -> str | None:
     """Recount scanner output and re-read the review instead of trusting status."""
+    if generated_jev_required:
+        generated_state = scan.get("generated_artifact_jev")
+        generated_error = generated_artifact_jev_rules.validate_readback(scan, generated_state)
+        if generated_error:
+            return generated_error
     limited_visual = scan.get("limited_visual_review")
     if isinstance(limited_visual, dict) and limited_visual.get("review_mode") == jev_post_render_rules.ROUTE:
         if visual_config is None or artifact is None:
@@ -724,6 +738,8 @@ def _validate_artifact_quality_receipt(contract_path: Path, receipt_path: Path) 
         "common-1": ARTIFACT_QUALITY_ROOT / "quality_rules/common.py",
         "rendered-readback-1": ARTIFACT_QUALITY_ROOT / "quality_rules/rendered_readback.py",
         "layout-typography-1": ARTIFACT_QUALITY_ROOT / "quality_rules/layout_typography.py",
+        "jev-post-render-1": ARTIFACT_QUALITY_ROOT / "quality_rules/jev_post_render.py",
+        "generated-artifact-jev-1": ARTIFACT_QUALITY_ROOT / "quality_rules/generated_artifact_jev.py",
         "source-typography-1": ARTIFACT_QUALITY_ROOT / "quality_rules/source_typography.py",
     }
     if fax.applies(contract):
@@ -782,6 +798,11 @@ def _validate_artifact_quality_receipt(contract_path: Path, receipt_path: Path) 
                 visual_config=(contract.get("artifact_quality", {}).get("layout_typography", {}).get("jev_post_render_review")),
                 artifact=artifact,
                 producer=({"task_id": manifest.get("created_by_task_id"), "run_id": manifest.get("created_by_run_id")} if manifest else None),
+                generated_jev_required=(
+                    isinstance(contract.get("artifact_quality"), dict)
+                    and isinstance(contract["artifact_quality"].get("layout_typography"), dict)
+                    and contract["artifact_quality"]["layout_typography"].get("required") is True
+                ),
             )
             if scan_error:
                 return set(), scan_error

@@ -34,6 +34,7 @@ REVIEW_CANDIDATE_RULES = frozenset({
     "content_block_intra_spacing_candidate",
     "content_block_mapping_ambiguous",
     "content_block_vertical_association_unspecified",
+    "badge_text_interference_candidate",
 })
 LINE_SPACING_DEFECTS = frozenset({
     "line_spacing_overflow", "line_spacing_clipping", "line_spacing_overlap",
@@ -63,6 +64,53 @@ def _gap(a: tuple[float, float, float, float], b: tuple[float, float, float, flo
 def _union_bbox(items: list[dict[str, Any]]) -> list[float]:
     boxes = [item["bbox"] for item in items]
     return [round(min(box[0] for box in boxes), 3), round(min(box[1] for box in boxes), 3), round(max(box[2] for box in boxes), 3), round(max(box[3] for box in boxes), 3)]
+
+
+def _badge_text_interference_candidates(page: fitz.Page, page_no: int,
+                                        blocks: list[dict[str, Any]],
+                                        renders: dict[int, dict[str, Any]]) -> list[dict[str, Any]]:
+    """Find text touching small filled Bezier circles, excluding enclosed labels."""
+    found: list[dict[str, Any]] = []
+    try:
+        drawings = page.get_drawings()
+    except Exception:
+        return found
+    for drawing in drawings:
+        if not isinstance(drawing, dict) or drawing.get("fill") is None:
+            continue
+        raw_rect = drawing.get("rect")
+        if not isinstance(raw_rect, fitz.Rect):
+            continue
+        circle = fitz.Rect(raw_rect)
+        width, height = float(circle.width), float(circle.height)
+        if (width < 8 or height < 8 or max(width, height) > 36
+                or min(width, height) <= 0 or max(width, height) / min(width, height) > 1.3):
+            continue
+        items = drawing.get("items", [])
+        if not isinstance(items, (list, tuple)) or sum(bool(item) and item[0] == "c" for item in items) < 4:
+            continue
+        circle_box = tuple(float(v) for v in circle)
+        padded = fitz.Rect(circle.x0 - 5, circle.y0 - 5, circle.x1 + 5, circle.y1 + 5)
+        for item in blocks:
+            text_box = fitz.Rect(item["bbox"])
+            # A number/label fully enclosed by the badge is intentional content.
+            if circle.contains(text_box):
+                continue
+            if not padded.intersects(text_box):
+                continue
+            text_bbox = [round(v, 3) for v in text_box]
+            union = [min(circle_box[0], text_bbox[0]), min(circle_box[1], text_bbox[1]),
+                     max(circle_box[2], text_bbox[2]), max(circle_box[3], text_bbox[3])]
+            issue = {
+                "rule": "badge_text_interference_candidate", "page": page_no,
+                "bbox_pdf_points": [round(v, 3) for v in union],
+                "circle_bbox_pdf_points": [round(v, 3) for v in circle_box],
+                "text_bbox_pdf_points": text_bbox,
+                "semantic_role": "unspecified",
+            }
+            _attach_render_evidence(issue, renders)
+            found.append(issue)
+    return found
 
 
 def _sha256(path: Path) -> str:
@@ -516,6 +564,8 @@ def scan_pdf(artifact: Path, config: dict[str, Any], *, render_manifest: Path | 
                     })
                     if first_cjk_page is None and _cjk(text):
                         first_cjk_page = page_no
+
+            issues.extend(_badge_text_interference_candidates(page, page_no, blocks, renders))
 
             # Exact collisions remain candidates even when PyMuPDF groups the
             # colliding draws into one block. Minimum-gap checks skip same-block

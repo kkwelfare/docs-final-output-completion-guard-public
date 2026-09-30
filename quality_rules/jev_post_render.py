@@ -31,6 +31,7 @@ RULE_CRITERIA = {
     "content_block_spacing_candidate": ["line_spacing"],
     "content_block_intra_spacing_candidate": ["line_spacing"],
     "unclassified_source_overlap_or_gutter": ["geometry_consistency"],
+    "badge_text_interference_candidate": ["geometry_consistency"],
 }
 
 
@@ -132,7 +133,10 @@ def validate_request(request: dict) -> dict:
         c = by_id[row["id"]]
         if c["rule"] not in RULE_CRITERIA or c["criteria"] != RULE_CRITERIA[c["rule"]]:
             raise PostRenderError("invalid_request")
-        if any(c[k] != row.get(k) for k in ("rule", "page", "bbox_pdf_points")):
+        compare_keys = ["rule", "page", "bbox_pdf_points"]
+        if row.get("rule") == "badge_text_interference_candidate":
+            compare_keys.extend(("circle_bbox_pdf_points", "text_bbox_pdf_points"))
+        if any(c.get(k) != row.get(k) for k in compare_keys):
             raise PostRenderError("identity_drift")
         if c["affected_pages"] != row.get("affected_pages", [row["page"]]):
             raise PostRenderError("identity_drift")
@@ -238,6 +242,48 @@ def measure_pdf(artifact: Path, page_number: int, bbox: list) -> dict:
 
 def measure_candidate(artifact: Path, candidate: dict) -> dict:
     metrics = measure_pdf(artifact, candidate["page"], candidate["bbox_pdf_points"])
+    if candidate["rule"] == "badge_text_interference_candidate":
+        circle_box = candidate.get("circle_bbox_pdf_points")
+        text_box = candidate.get("text_bbox_pdf_points")
+        if not (isinstance(circle_box, list) and len(circle_box) == 4
+                and isinstance(text_box, list) and len(text_box) == 4):
+            raise PostRenderError("invalid_request")
+        try:
+            with fitz.open(artifact) as doc:
+                page = doc[candidate["page"] - 1]
+                circles = []
+                for drawing in page.get_drawings():
+                    raw = drawing.get("rect") if isinstance(drawing, dict) else None
+                    if drawing.get("fill") is None or not isinstance(raw, fitz.Rect):
+                        continue
+                    rect = fitz.Rect(raw)
+                    curves = sum(bool(item) and item[0] == "c" for item in drawing.get("items", []))
+                    if (curves >= 4 and rect.width >= 8 and rect.height >= 8
+                            and max(rect.width, rect.height) <= 36
+                            and max(rect.width, rect.height) / min(rect.width, rect.height) <= 1.3):
+                        circles.append([round(v, 3) for v in rect])
+                lines = [
+                    [round(v, 3) for v in line["bbox"]]
+                    for block in page.get_text("dict").get("blocks", [])
+                    for line in block.get("lines", [])
+                ]
+                if circle_box not in circles or text_box not in lines:
+                    raise PostRenderError("identity_drift")
+                circle = fitz.Rect(circle_box)
+                text = fitz.Rect(text_box)
+                if circle.contains(text) or not fitz.Rect(circle.x0-5, circle.y0-5, circle.x1+5, circle.y1+5).intersects(text):
+                    raise PostRenderError("identity_drift")
+                metrics["badge_text_interference"] = {
+                    "circle_bbox_pdf_points": circle_box,
+                    "outside_text_bbox_pdf_points": text_box,
+                    "expanded_contact_region_pt": 5.0,
+                    "text_intersects_circle_bbox": circle.intersects(text),
+                    "semantic_role": "unspecified",
+                }
+        except PostRenderError:
+            raise
+        except Exception as exc:
+            raise PostRenderError("invalid_request") from exc
     if candidate["rule"] == jev_glyph_locale.RULE:
         try:
             metrics["glyph_locale"] = jev_glyph_locale.measure(
@@ -256,6 +302,9 @@ def build_request(*, artifact: Path, raw_scan: Path, artifact_set_id: str,
         if row["rule"] not in RULE_CRITERIA:
             raise PostRenderError("invalid_request")
         c={k:copy.deepcopy(row[k]) for k in ("id","rule","page","bbox_pdf_points")}
+        if row["rule"] == "badge_text_interference_candidate":
+            c["circle_bbox_pdf_points"] = copy.deepcopy(row["circle_bbox_pdf_points"])
+            c["text_bbox_pdf_points"] = copy.deepcopy(row["text_bbox_pdf_points"])
         c["affected_pages"] = copy.deepcopy(row.get("affected_pages", [row["page"]]))
         c.update(render=copy.deepcopy(row["render_evidence"]),
                  semantic_role=row.get("semantic_role","unspecified"),
@@ -312,7 +361,10 @@ def build_wire(request: dict) -> tuple[dict, list[dict]]:
     validate_request(request)
     rows=[]; records=[]
     for c in request["candidates"]:
-        rows.append({k:copy.deepcopy(c[k]) for k in ("id","rule","page","bbox_pdf_points","affected_pages","criteria","semantic_role")})
+        keys = ["id","rule","page","bbox_pdf_points","affected_pages","criteria","semantic_role"]
+        if c["rule"] == "badge_text_interference_candidate":
+            keys.extend(("circle_bbox_pdf_points", "text_bbox_pdf_points"))
+        rows.append({k:copy.deepcopy(c[k]) for k in keys})
         rows[-1]["metrics"] = wire_metrics(c["metrics"])
         rows[-1]["metrics_sha256"] = digest(c["metrics"])
         rows[-1]["render_sha256"]=c["render"]["sha256"]

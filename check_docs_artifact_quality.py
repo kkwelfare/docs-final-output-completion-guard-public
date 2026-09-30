@@ -12,7 +12,7 @@ import fitz
 from PIL import Image
 from quality_rules import jev_post_render
 
-from quality_rules import cjk_font_selector, common, composition, execution_contract, fax, finalization, generic_pdf_repair_adapter, html_pdf_harness, jev_overlap, layout_typography, readability, rendered_readback, repair_controller, safe_wrap, source_typography, visible_ink
+from quality_rules import cjk_font_selector, common, composition, execution_contract, fax, finalization, generated_artifact_jev, generic_pdf_repair_adapter, html_pdf_harness, jev_overlap, layout_typography, readability, rendered_readback, repair_controller, safe_wrap, source_typography, visible_ink
 
 ROOT = Path(__file__).resolve().parent
 SCHEMA_VERSION = "docs-artifact-quality-receipt-1"
@@ -33,6 +33,29 @@ def sha256(path: Path) -> str:
 
 def _handle(path: Path) -> dict[str, str]:
     return common.handle(path)
+
+
+def _validated_receiver_identity(
+    manifest: dict[str, Any] | None, finalization_spec: Any,
+) -> dict[str, Any] | None:
+    """Use only an accepted, manifest-bound receiver as the Jev reviewer."""
+    if not isinstance(manifest, dict) or not isinstance(finalization_spec, dict):
+        return None
+    raw = finalization_spec.get("receiver_receipt")
+    path = Path(raw) if isinstance(raw, str) else Path()
+    if not path.is_absolute() or not path.is_file():
+        return None
+    if finalization.validate_receiver_copy(manifest, path, require_identity=True):
+        return None
+    try:
+        receipt = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+    task_id, run_id = receipt.get("receiver_task_id"), receipt.get("receiver_run_id")
+    if (not isinstance(task_id, str) or not task_id.strip()
+            or isinstance(run_id, bool) or not isinstance(run_id, int) or run_id < 1):
+        return None
+    return {"task_id": task_id, "run_id": run_id}
 
 
 def _read_hash_bound_json(value: Any, label: str) -> tuple[dict[str, Any] | None, dict[str, str] | None, str | None]:
@@ -461,6 +484,9 @@ def _write_common_evidence_manifest(
 def build_receipt(
     contract_path: Path, *, evidence_dir: Path | None = None,
     jev_request_fn: Callable[[dict[str, Any]], Any] | None = None,
+    jev_reviewer_identity: dict[str, Any] | None = None,
+    jev_fixture_adapter: Callable[[dict[str, Any]], Any] | None = None,
+    jev_fixture_identity: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], int]:
     contract_path = contract_path.resolve(strict=True)
     contract = json.loads(contract_path.read_text(encoding="utf-8"))
@@ -515,6 +541,7 @@ def build_receipt(
                 finalization_path=finalization_path,
             )
             contract_errors.extend(f"AQ-HASH-01: {error}" for error in bundle_errors)
+    jev_runtime_reviewer = _validated_receiver_identity(finalization_manifest, finalization_spec)
     receipt: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -526,6 +553,8 @@ def build_receipt(
             {"id": "rendered-readback-1", **_handle(ROOT / "quality_rules/rendered_readback.py")},
             {"id": "readability-1", **_handle(ROOT / "quality_rules/readability.py")},
             {"id": "layout-typography-1", **_handle(ROOT / "quality_rules/layout_typography.py")},
+            {"id": "jev-post-render-1", **_handle(ROOT / "quality_rules/jev_post_render.py")},
+            {"id": "generated-artifact-jev-1", **_handle(ROOT / "quality_rules/generated_artifact_jev.py")},
             {"id": "visible-ink-1", **_handle(ROOT / "quality_rules/visible_ink.py")},
             {"id": "composition-layers-1", **_handle(ROOT / "quality_rules/composition.py")},
             {"id": "jev-overlap-structure-1", **_handle(ROOT / "quality_rules/jev_overlap.py")},
@@ -785,6 +814,29 @@ def build_receipt(
                         surface_hard_failures = [item for item in surface_readback.get("HARD_FAIL", []) if isinstance(item, dict)]
                         scan["surface_readback"] = _handle(readback_manifest)
                 scan["issues"].extend(composition_candidates)
+                producer_identity = (
+                    {"task_id": finalization_manifest.get("created_by_task_id"),
+                     "run_id": finalization_manifest.get("created_by_run_id")}
+                    if finalization_manifest else None
+                )
+                if jev_fixture_adapter is not None and isinstance(jev_fixture_identity, dict):
+                    # Explicit fixture injection for deterministic integration tests;
+                    # never consulted by normal producer contracts or live routes.
+                    producer_identity = jev_fixture_identity.get("producer")
+                    fixture_artifact_set_id = jev_fixture_identity.get("artifact_set_id")
+                    reviewer_identity = jev_fixture_identity.get("reviewer")
+                else:
+                    fixture_artifact_set_id = None
+                    # The receiver's identity is accepted only after validating its
+                    # hash-bound copy receipt against the producer manifest.
+                    reviewer_identity = jev_runtime_reviewer
+                scan["generated_artifact_jev"] = generated_artifact_jev.run(
+                    artifact=artifact, scan=scan, evidence_dir=evidence,
+                    artifact_set_id=(fixture_artifact_set_id or finalization_manifest.get("artifact_set_id")
+                                     if finalization_manifest else fixture_artifact_set_id),
+                    producer=producer_identity, reviewer=reviewer_identity,
+                    fixture_adapter=jev_fixture_adapter,
+                )
                 candidates = [item for item in scan["issues"] if item.get("severity") == "review"] + [
                     item for item in source_scan["issues"] if item.get("severity") == "review"
                 ]
