@@ -83,3 +83,10 @@ def test_completion_guard_blocks_missing_artifact_quality_receipt(tmp_path, monk
     monkeypatch.setattr(guard, "_validate_receipt", lambda _: ({str(pdf.resolve())}, None))
     result = guard._pre_tool_call(tool_name="kanban_complete", args=_args(pdf, contract, []))
     assert result and result["action"] == "block" and "contract and receipts" in result["message"]
+
+
+def test_artifact_quality_receipt_allowlist_accepts_checker_status_fields_only():
+    guard = _load_guard()
+    canonical_status = {"artifact_quality": "pass", "workflow_state": "ready"}
+    assert guard._unsupported_artifact_quality_receipt_fields(canonical_status) == set()
+    assert guard._unsupported_artifact_quality_receipt_fields({**canonical_status, "unexpected": "value"}) == {"unexpected"}

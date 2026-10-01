@@ -630,6 +630,16 @@ def _validate_scan_readback(
     return None
 
 
+ARTIFACT_QUALITY_RECEIPT_ALLOWED_FIELDS = frozenset({
+    "schema_version", "created_at", "status", "contract", "checker", "rulesets", "entries",
+    "quality_layers", "finalization", "execution_contract", "artifact_quality", "workflow_state",
+})
+
+
+def _unsupported_artifact_quality_receipt_fields(receipt: dict[str, Any]) -> set[str]:
+    return set(receipt).difference(ARTIFACT_QUALITY_RECEIPT_ALLOWED_FIELDS)
+
+
 def _validate_artifact_quality_receipt(contract_path: Path, receipt_path: Path) -> tuple[set[str], str | None]:
     if not contract_path.is_absolute() or not contract_path.is_file():
         return set(), "artifact-quality contract is missing or not an absolute file"
