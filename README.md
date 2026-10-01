@@ -32,6 +32,10 @@ For eligible PDFs, the plugin's `generated_artifact_jev.run` route supports one 
 
 The existing public layout Jev repository is an optional, separate Hermes plugin: https://github.com/kkwelfare/jev-route-screening-public, pinned interoperability reference `9e2d276c2e2aa6ff5b4b547b31aa100c9695f11e` (`master` at publication). It exposes its documented Hermes tools/hooks (including `jev_bridge_review`); it is not imported as a Python package and does not define this guard's PDF-classification API. This guard's optional PDF advisory uses the explicit TypeSafe SystemOne decisions request contract in `quality_rules/jev_overlap.py`, with a bounded OpenRouter route only under that module's existing permitted fallback conditions. The Jev result is advisory; local deterministic quality rules remain authoritative. This describes an optional producer/host integration, not a universal completion enforcement claim. No provider call is made by the offline tests or plugin load validation.
 
+## Lifecycle logging
+
+The optional Jev overlap, design, and post-render routes emit bounded metadata-only `jev.lifecycle` INFO events around provider attempts, fallback, validation, and result/receipt delivery. Artifact body, user text, and credentials are not logged. Logging failures remain non-authoritative; deterministic local quality and receipt rules retain their existing behavior.
+
 ## Format and evidence boundary
 
 The public adapters inspect UTF-8 text/Markdown, JSON, DOCX, PPTX, and PDF inputs. Text inputs are checked by the canonical local checker; JSON and container inputs receive structural checks and require a host renderer for a real document render. The evidence receipt records paths, formats, counts, hashes, rule IDs, and statuses only. It rejects raw text/body/content fields, binary payloads, provider payload bodies, and image transport. The candidate never sends images to a provider.

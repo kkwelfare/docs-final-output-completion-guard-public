@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
+import re
 import math
 import os
 from collections.abc import Callable, Mapping
@@ -16,6 +18,28 @@ from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+
+log = logging.getLogger("hermes_plugins.jev_lifecycle.docs")
+log.setLevel(logging.INFO)
+if not any(getattr(h, "_jev_lifecycle_console", False) for h in log.handlers):
+    _console = logging.StreamHandler()
+    _console.setLevel(logging.INFO)
+    _console.setFormatter(logging.Formatter("%(message)s"))
+    setattr(_console, "_jev_lifecycle_console", True)
+    log.addHandler(_console)
+
+def _jev_lifecycle(event: str, route: str, request_id: str, **fields: Any) -> None:
+    try:
+        allowed = {"provider", "attempt", "status", "fallback", "failure", "destination"}
+        safe = {key: value for key, value in fields.items() if key in allowed}
+        clean = lambda value, limit: re.sub(r"[^A-Za-z0-9_.:+-]", "_", str(value))[:limit]
+        for key, value in list(safe.items()):
+            if isinstance(value, str): safe[key] = clean(value, 96)
+        log.info("jev.lifecycle event=%s route=%s request_id=%s metadata=%s", clean(event, 64), clean(route, 96), clean(request_id, 80), json.dumps(safe, sort_keys=True, separators=(",", ":")))
+    except Exception:
+        return
+
 
 SCHEMA_VERSION = "docs-jev-overlap-structure-1"
 REQUEST_SCHEMA_VERSION = "docs-jev-overlap-request-1"
@@ -735,13 +759,26 @@ def _supported_wire_request(request_body: Mapping[str, Any], config: Mapping[str
     if config.get("allow_live_provider") is not True:
         raise JevOverlapError("provider_unavailable")
     timeout = float(config.get("timeout_seconds", DEFAULT_TIMEOUT_SECONDS))
+    request_id = "jev-docs-" + _digest(request_body)[:20]
+    def attempt(endpoint: str, key_env: str, model: str, provider: str, index: int) -> Any:
+        _jev_lifecycle("provider_start", "jev.docs.overlap", request_id, provider=provider, attempt=index)
+        try:
+            response = _post_provider(endpoint, key_env, model, request_body, timeout)
+            _jev_lifecycle("transport_response", "jev.docs.overlap", request_id, provider=provider, attempt=index, status="returned")
+            return response
+        except Exception as error:
+            reason = error.reason if isinstance(error, JevOverlapError) else type(error).__name__
+            _jev_lifecycle("provider_failure", "jev.docs.overlap", request_id, provider=provider, attempt=index, failure=reason)
+            raise
     try:
-        response = _post_provider(PRIMARY_ENDPOINT, PRIMARY_API_KEY_ENV, str(config.get("model", PRIMARY_MODEL)), request_body, timeout)
+        response = attempt(PRIMARY_ENDPOINT, PRIMARY_API_KEY_ENV, str(config.get("model", PRIMARY_MODEL)), "typesafe-system-one", 1)
         return response, "typesafe-system-one"
     except JevOverlapError as error:
         if not _fallback_allowed(error):
+            _jev_lifecycle("fallback_skipped", "jev.docs.overlap", request_id, provider="openrouter-decisions", failure=error.reason)
             raise
-    response = _post_provider(FALLBACK_ENDPOINT, FALLBACK_API_KEY_ENV, FALLBACK_MODEL, request_body, timeout)
+    _jev_lifecycle("fallback_start", "jev.docs.overlap", request_id, provider="openrouter-decisions", fallback=True)
+    response = attempt(FALLBACK_ENDPOINT, FALLBACK_API_KEY_ENV, FALLBACK_MODEL, "openrouter-decisions", 2)
     return response, "openrouter-decisions"
 
 
@@ -803,6 +840,8 @@ def classify_candidates(
             else:
                 response, provider = _supported_wire_request(request, config)
             parsed = parse_response(response)
+            _jev_lifecycle("validated_response", "jev.docs.overlap", "jev-docs-" + _digest(request)[:20], status="valid")
+            _jev_lifecycle("result_returned", "jev.docs.overlap", "jev-docs-" + _digest(request)[:20], destination="docs_candidate_result", status="validated")
             results.append({
                 "schema_version": RESULT_SCHEMA_VERSION,
                 "candidate_id": candidate.get("id"),
@@ -820,14 +859,18 @@ def classify_candidates(
             if "probabilities" in parsed:
                 results[-1]["probabilities"] = parsed["probabilities"]
         except JevOverlapError as error:
+            _jev_lifecycle("provider_failure", "jev.docs.overlap", "jev-docs-unspecified", failure=error.reason)
             results.append(_unresolved(candidate, error.reason, projection))
         except TimeoutError:
+            _jev_lifecycle("evaluation_failure", "jev.docs.overlap", "jev-docs-" + _digest(request)[:20], failure="timeout")
             results.append(_unresolved(candidate, "timeout", projection))
         except OSError:
+            _jev_lifecycle("evaluation_failure", "jev.docs.overlap", "jev-docs-" + _digest(request)[:20], failure="provider_error")
             results.append(_unresolved(candidate, "provider_error", projection))
         except Exception:
             # Provider implementations are untrusted integration points.  A
             # local checker failure is an unresolved review, never a pass.
+            _jev_lifecycle("evaluation_failure", "jev.docs.overlap", "jev-docs-" + _digest(request)[:20], failure="provider_error")
             results.append(_unresolved(candidate, "provider_error", projection))
     branches = [item.get("branch") for item in results]
     if any(branch == "adjust" for branch in branches):
@@ -836,6 +879,7 @@ def classify_candidates(
         decision = "request_information"
     else:
         decision = "maintain"
+    _jev_lifecycle("delivered", "jev.docs.overlap", "jev-docs-evaluation", destination="docs_quality_result_return", status="supplied")
     return {
         "schema_version": RESULT_SCHEMA_VERSION,
         "route": "structure-only-jev-overlap",
@@ -1600,6 +1644,8 @@ def classify_design_candidates(
                 response, provider = _supported_wire_request(request, config)
             response_hash = _digest(response)
             parsed = parse_design_response(response, expected_category=projection["category"])
+            _jev_lifecycle("validated_response", "jev.docs.design", "jev-docs-" + _digest(request)[:20], status="valid")
+            _jev_lifecycle("result_returned", "jev.docs.design", "jev-docs-" + _digest(request)[:20], destination="docs_design_result", status="validated")
             row: dict[str, Any] = {
                 "schema_version": DESIGN_RESULT_SCHEMA_VERSION,
                 "candidate_id": candidate.get("id"),
@@ -1733,6 +1779,7 @@ def blocked_design_input_result(
     reason: str,
 ) -> dict[str, Any]:
     """Return a fail-closed result before any provider invocation."""
+    _jev_lifecycle("delivered", "jev.docs.design", "jev-docs-set-" + _digest({"id": request_set_id})[:20], destination="docs_quality_result_return", status="supplied")
     return {
         "schema_version": DESIGN_RESULT_SCHEMA_VERSION,
         "route": "live-jev-standard" if execution_mode == "live" else "offline-jev-dry-run",
@@ -1767,19 +1814,28 @@ def _standard_provider_call(request: Mapping[str, Any], config: Mapping[str, Any
         raise JevOverlapError("provider_unavailable")
     timeout = float(config.get("timeout_seconds", DEFAULT_TIMEOUT_SECONDS))
     attempts: list[str] = []
+    request_id = "jev-docs-" + _digest(request)[:20]
     try:
         attempts.append("typesafe-system-one")
+        _jev_lifecycle("provider_start", "jev.docs.design", request_id, provider=attempts[-1], attempt=1)
         response = _post_provider(PRIMARY_ENDPOINT, PRIMARY_API_KEY_ENV, str(config.get("model", PRIMARY_MODEL)), request, timeout)
+        _jev_lifecycle("transport_response", "jev.docs.design", request_id, provider=attempts[-1], attempt=1, status="returned")
         return response, attempts[-1], attempts
     except JevOverlapError as primary_error:
+        _jev_lifecycle("provider_failure", "jev.docs.design", request_id, provider="typesafe-system-one", attempt=1, failure=primary_error.reason)
         if not _fallback_allowed(primary_error):
+            _jev_lifecycle("fallback_skipped", "jev.docs.design", request_id, provider="openrouter-decisions", failure=primary_error.reason)
             primary_error.provider_attempts = list(attempts)
             raise
     try:
         attempts.append("openrouter-decisions")
+        _jev_lifecycle("fallback_start", "jev.docs.design", request_id, provider=attempts[-1], fallback=True)
+        _jev_lifecycle("provider_start", "jev.docs.design", request_id, provider=attempts[-1], attempt=2)
         response = _post_provider(FALLBACK_ENDPOINT, FALLBACK_API_KEY_ENV, FALLBACK_MODEL, request, timeout)
+        _jev_lifecycle("transport_response", "jev.docs.design", request_id, provider=attempts[-1], attempt=2, status="returned")
         return response, attempts[-1], attempts
     except JevOverlapError as fallback_error:
+        _jev_lifecycle("provider_failure", "jev.docs.design", request_id, provider="openrouter-decisions", attempt=2, failure=fallback_error.reason)
         raise JevOverlapError(
             "both_providers_failed",
             fallback_error.status,
@@ -1878,6 +1934,8 @@ def evaluate_design_request_set(
             routes.extend(attempts)
             response_hash = _digest(response)
             parsed = parse_design_response(response, expected_category=projection["category"])
+            _jev_lifecycle("validated_response", "jev.docs.design", "jev-docs-" + _digest(request)[:20], status="valid")
+            _jev_lifecycle("result_returned", "jev.docs.design", "jev-docs-" + _digest(request)[:20], destination="docs_design_result", status="validated")
             row = {
                 "schema_version": DESIGN_RESULT_SCHEMA_VERSION,
                 "candidate_id": candidate.get("id"), "status": "classified",
@@ -1894,6 +1952,7 @@ def evaluate_design_request_set(
                 row["probabilities"] = parsed["probabilities"]
             results.append(row)
         except JevOverlapError as error:
+            _jev_lifecycle("provider_failure", "jev.docs.design", "jev-docs-" + (request_hash or "unknown")[:20], failure=error.reason)
             attempts = list(getattr(error, "provider_attempts", attempts))
             if provider is None and attempts:
                 provider = attempts[-1]

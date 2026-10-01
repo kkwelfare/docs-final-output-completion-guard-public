@@ -604,8 +604,16 @@ def text_provider(wire: dict, timeout: float) -> dict:
     """One bounded text-only call; raw response stays transient."""
     payload, mapping = build_provider_payload(wire)
     questions = payload["questions"]
-    raw=jev_overlap._post_provider(jev_overlap.PRIMARY_ENDPOINT,jev_overlap.PRIMARY_API_KEY_ENV,
-                                  "jev-latest",payload,timeout)
+    request_id = "jev-docs-render-" + str(wire.get("request_sha256", "unknown"))[:20]
+    jev_overlap._jev_lifecycle("provider_start", ROUTE, request_id, provider="typesafe-system-one", attempt=1)
+    try:
+        raw=jev_overlap._post_provider(jev_overlap.PRIMARY_ENDPOINT,jev_overlap.PRIMARY_API_KEY_ENV,
+                                      "jev-latest",payload,timeout)
+        jev_overlap._jev_lifecycle("transport_response", ROUTE, request_id, provider="typesafe-system-one", attempt=1, status="returned")
+    except Exception as error:
+        reason = error.reason if isinstance(error, jev_overlap.JevOverlapError) else type(error).__name__
+        jev_overlap._jev_lifecycle("provider_failure", ROUTE, request_id, provider="typesafe-system-one", attempt=1, failure=reason)
+        raise
     if not isinstance(raw,dict) or len(canonical(raw)) > MAX_JSON_BYTES or not isinstance(raw.get("answers"),dict):
         raise PostRenderError("malformed_response")
     answers=raw["answers"]
@@ -762,6 +770,7 @@ def evaluate(request: dict, *, fixture_adapter: Callable | None = None) -> dict:
         receipt["provider_invoked"] = True
         response = _bounded_call(fn, wire, float(request["timeout_seconds"]))
         status = _validate_reviews(response, request)
+        jev_overlap._jev_lifecycle("validated_response", ROUTE, "jev-docs-render-" + str(wire.get("request_sha256", "unknown"))[:20], status="valid")
         validate_request(request)  # detect artifact/scan/image mutation during call
         receipt.update(status=status, reason_code="ok", reviews=copy.deepcopy(response["reviews"]))
         if "whole_artifact_review" in response:
@@ -775,6 +784,10 @@ def evaluate(request: dict, *, fixture_adapter: Callable | None = None) -> dict:
     except Exception:
         receipt["reason_code"] = "provider_error"
     validate_schema(receipt, "receipt")
+    if receipt["provider_invoked"]:
+        if receipt["reason_code"] != "ok":
+            jev_overlap._jev_lifecycle("evaluation_failure", ROUTE, "jev-docs-render-" + str(receipt.get("request_sha256", "unknown"))[:20], failure=receipt["reason_code"])
+        jev_overlap._jev_lifecycle("delivered", ROUTE, "jev-docs-render-" + str(receipt.get("request_sha256", "unknown"))[:20], destination="docs_post_render_receipt_return", status="supplied")
     return receipt
 
 
