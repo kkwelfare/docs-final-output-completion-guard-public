@@ -6,7 +6,7 @@ import json
 import sys
 from pathlib import Path
 
-import fitz
+import pymupdf
 from pptx import Presentation
 from pptx.util import Pt
 
@@ -34,7 +34,7 @@ def _source_and_pdf(tmp_path: Path, *, overlap=False, semantic=False):
     if semantic:
         a.name, b.name = "qa-semantic:pair:a", "qa-semantic:pair:b"
     deck.save(pptx)
-    pdf = tmp_path / "artifact.pdf"; doc = fitz.open(); page = doc.new_page(width=300, height=180); page.insert_text((30, 40), "English only"); doc.save(pdf); doc.close()
+    pdf = tmp_path / "artifact.pdf"; doc = pymupdf.open(); page = doc.new_page(width=300, height=180); page.insert_text((30, 40), "English only"); doc.save(pdf); doc.close()
     return pptx, pdf
 
 

@@ -4,7 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pytest
 from jsonschema import Draft202012Validator
 from PIL import Image, ImageDraw
@@ -48,8 +48,8 @@ def _png(path: Path) -> None:
 
 
 def _pdf(path: Path) -> None:
-    document = fitz.open(); page = document.new_page(width=100, height=80)
-    page.draw_rect(fitz.Rect(30, 20, 70, 60), color=(0, 0, 0), fill=(0, 0, 0))
+    document = pymupdf.open(); page = document.new_page(width=100, height=80)
+    page.draw_rect(pymupdf.Rect(30, 20, 70, 60), color=(0, 0, 0), fill=(0, 0, 0))
     document.save(path); document.close()
 
 

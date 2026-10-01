@@ -12,7 +12,7 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
-import fitz
+import pymupdf
 from PIL import Image, ImageChops, ImageFilter, ImageStat
 
 try:
@@ -194,20 +194,20 @@ def _physical_text_metrics(artifact: Path, region: dict[str, Any]) -> dict[str, 
     if artifact.suffix.lower() != ".pdf":
         return None
     try:
-        with fitz.open(artifact) as document:
+        with pymupdf.open(artifact) as document:
             page_index = region["render_index"] - 1
             if page_index >= len(document):
                 return None
             page = document[page_index]
             bbox = region["bbox_norm"]
-            target = fitz.Rect(bbox[0] * page.rect.width, bbox[1] * page.rect.height,
+            target = pymupdf.Rect(bbox[0] * page.rect.width, bbox[1] * page.rect.height,
                                bbox[2] * page.rect.width, bbox[3] * page.rect.height)
             sizes: list[float] = []
             cjk_span_count = 0
             for block in page.get_text("dict").get("blocks", []):
                 for line in block.get("lines", []):
                     for span in line.get("spans", []):
-                        span_box = fitz.Rect(span.get("bbox", (0, 0, 0, 0)))
+                        span_box = pymupdf.Rect(span.get("bbox", (0, 0, 0, 0)))
                         if span_box.intersects(target) and isinstance(span.get("size"), (int, float)):
                             sizes.append(float(span["size"]))
                             text = str(span.get("text", ""))

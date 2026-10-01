@@ -6,7 +6,7 @@ import json
 import sys
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,7 +16,7 @@ from quality_rules import generated_artifact_jev as route, jev_post_render as je
 
 def pdf_fixture(tmp_path):
     artifact = tmp_path / "all-pages.pdf"
-    with fitz.open() as doc:
+    with pymupdf.open() as doc:
         for index in range(3):
             doc.new_page(width=300, height=180).insert_text((35, 70), f"Private body {index}", fontsize=14)
         doc.save(artifact)

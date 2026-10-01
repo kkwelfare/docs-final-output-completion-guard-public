@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-import fitz
+import pymupdf
 from PIL import Image
 from quality_rules import jev_post_render
 
@@ -237,10 +237,10 @@ def _html_pdf_rule(contract: dict[str, Any], artifact: Path) -> tuple[str, dict[
 
 def _render_fax(pdf: Path, evidence: Path, threshold: int) -> dict[str, Path]:
     evidence.mkdir(parents=True, exist_ok=True)
-    with fitz.open(pdf) as document:
+    with pymupdf.open(pdf) as document:
         if len(document) != 1:
             raise ValueError("FAX PDF must have exactly one page")
-        pixmap = document[0].get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False, colorspace=fitz.csRGB)
+        pixmap = document[0].get_pixmap(matrix=pymupdf.Matrix(2, 2), alpha=False, colorspace=pymupdf.csRGB)
         original = evidence / f"{_key(pdf)}.FAX-RENDER-01.png"
         pixmap.save(str(original))
     with Image.open(original) as image:

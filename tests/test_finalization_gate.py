@@ -340,7 +340,7 @@ def test_cjk_bad_break_returns_only_planned_parity_rule():
 def test_dead_space_profile_threshold_blocks_only_dead_space_rule(tmp_path, monkeypatch):
     pdf = tmp_path / "artifact.pdf"
     pdf.write_bytes(b"pdf")
-    monkeypatch.setattr(layout_typography.fitz, "open", lambda _: fake_document(bbox=(10, 10, 80, 20), height=100))
+    monkeypatch.setattr(layout_typography.pymupdf, "open", lambda _: fake_document(bbox=(10, 10, 80, 20), height=100))
     scan = layout_typography.scan_pdf(pdf, {
         "required": True, "measurement_basis": "pdf_points", "minimum_gap_pt": 2,
         "dead_space": {"bottom_blank_ratio_max": 0.5},
@@ -375,7 +375,7 @@ def test_normal_pdf_manifest_receiver_and_layout_pass(tmp_path, monkeypatch):
     write_receiver(receipt_path, manifest, [(artifact, copy_path)])
     assert finalization.validate_manifest(manifest_path, [str(artifact)])[1] is None
     assert finalization.validate_receiver_copy(manifest, receipt_path) is None
-    monkeypatch.setattr(layout_typography.fitz, "open", lambda _: fake_document(bbox=(10, 80, 80, 95), height=100))
+    monkeypatch.setattr(layout_typography.pymupdf, "open", lambda _: fake_document(bbox=(10, 80, 80, 95), height=100))
     scan = layout_typography.scan_pdf(artifact, {
         "required": True, "measurement_basis": "pdf_points", "minimum_gap_pt": 2,
         "dead_space": {"bottom_blank_ratio_max": 0.2},

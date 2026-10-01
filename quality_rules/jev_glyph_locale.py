@@ -7,7 +7,7 @@ from __future__ import annotations
 import hashlib
 import re
 from pathlib import Path
-import fitz
+import pymupdf
 from . import cjk_font_selector
 
 CRITERION = 'cjk_glyph_locale'
@@ -52,7 +52,7 @@ def font_records(doc, page, selection):
         selected_names = {normalized(selection.family)} if selection.family else set()
         if selection.path:
             try:
-                selected_names.add(normalized(fitz.Font(fontfile=selection.path).name))
+                selected_names.add(normalized(pymupdf.Font(fontfile=selection.path).name))
             except Exception:
                 pass
         aliases = {normalized(a) for _, _, aa in cjk_font_selector.JAPANESE_FONT_GROUPS for a in aa}
@@ -76,7 +76,7 @@ def measure(artifact: Path, page_number: int, bbox: list, render: dict) -> dict:
         'selector_sha256':sha(Path(cjk_font_selector.__file__).read_bytes()),
         'priority':selection.priority, 'fallback_decision':selection.fallback_decision,
         'basis':'current_local_selector_not_producer_attestation'}
-    with fitz.open(artifact) as doc:
+    with pymupdf.open(artifact) as doc:
         if not doc.is_pdf or not 1 <= page_number <= len(doc):
             raise ValueError('invalid_request')
         page = doc[page_number - 1]
@@ -89,11 +89,11 @@ def measure(artifact: Path, page_number: int, bbox: list, render: dict) -> dict:
         rp = Path(render['path'])
         if rp.stat().st_size > 32_000_000:
             raise ValueError('insufficient_evidence')
-        actual = fitz.Pixmap(str(rp))
+        actual = pymupdf.Pixmap(str(rp))
         scale = render.get('render_scale', actual.width / page.rect.width)
         if not .25 <= scale <= 4 or actual.width * actual.height > 16_000_000:
             raise ValueError('insufficient_evidence')
-        expected = page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False)
+        expected = page.get_pixmap(matrix=pymupdf.Matrix(scale, scale), alpha=False)
         if (actual.width, actual.height, actual.n, sha(actual.samples)) != (expected.width, expected.height, expected.n, sha(expected.samples)):
             raise ValueError('identity_drift')
         if len(render) > 2:
@@ -108,7 +108,7 @@ def measure(artifact: Path, page_number: int, bbox: list, render: dict) -> dict:
             for line in block.get('lines', []):
                 for span in line['spans']:
                     for char in span['chars']:
-                        box = fitz.Rect(char['bbox'])
+                        box = pymupdf.Rect(char['bbox'])
                         if not box.intersects(region):
                             continue
                         count += 1
@@ -124,7 +124,7 @@ def measure(artifact: Path, page_number: int, bbox: list, render: dict) -> dict:
         # Numeric raster summaries remain local-derived proxies. No pixels leave.
         if region.width * region.height > 1_000_000:
             raise ValueError('insufficient_evidence')
-        pix = page.get_pixmap(clip=region, colorspace=fitz.csGRAY, alpha=False)
+        pix = page.get_pixmap(clip=region, colorspace=pymupdf.csGRAY, alpha=False)
         samples = pix.samples
         raster = {'width':pix.width, 'height':pix.height,
             'nonwhite_ratio':round(sum(v < 245 for v in samples) / len(samples),6),

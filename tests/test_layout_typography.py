@@ -6,7 +6,7 @@ import json
 import sys
 from pathlib import Path
 
-import fitz
+import pymupdf
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -35,7 +35,7 @@ def _load_guard():
 
 
 def _pdf(path: Path, draw) -> Path:
-    doc = fitz.open()
+    doc = pymupdf.open()
     page = doc.new_page(width=300, height=180)
     draw(page)
     doc.save(path)
@@ -62,7 +62,7 @@ def _fake_scan(tmp_path, monkeypatch, lines, *, render_manifest=None, config=Non
     pdf = tmp_path / "fake-wrap.pdf"
     pdf.write_bytes(b"%PDF-fake-fixture")
     class FakePage:
-        rect = fitz.Rect(0, 0, 300, 180)
+        rect = pymupdf.Rect(0, 0, 300, 180)
         def get_text(self, kind):
             assert kind == "rawdict"
             return {"blocks": [{"type": 0, "lines": [
@@ -72,7 +72,7 @@ def _fake_scan(tmp_path, monkeypatch, lines, *, render_manifest=None, config=Non
     class FakeDoc:
         def __enter__(self): return [FakePage()]
         def __exit__(self, *args): return False
-    monkeypatch.setattr(layout_typography.fitz, "open", lambda _: FakeDoc())
+    monkeypatch.setattr(layout_typography.pymupdf, "open", lambda _: FakeDoc())
     scan_config = {"required": True, "expected_cjk_fonts": ["IPAGothic"]} if config is None else config
     return layout_typography.scan_pdf(pdf, scan_config, render_manifest=render_manifest)
 
@@ -141,21 +141,21 @@ def test_circled_number_bold_fixture_fails_targeted_rule(tmp_path, monkeypatch):
     # receives the extracted circled-number/bold span as its renderer would.
     pdf = _pdf(tmp_path / "circled.pdf", lambda page: page.insert_text((30, 40), "placeholder"))
     class FakePage:
-        rect = fitz.Rect(0, 0, 300, 180)
+        rect = pymupdf.Rect(0, 0, 300, 180)
         def get_text(self, kind):
             assert kind == "rawdict"
             return {"blocks": [{"type": 0, "lines": [{"bbox": [10, 10, 30, 20], "spans": [_raw_span("①", [10, 10, 30, 20], 16)]}]}]}
     class FakeDoc:
         def __enter__(self): return [FakePage()]
         def __exit__(self, *args): return False
-    monkeypatch.setattr(layout_typography.fitz, "open", lambda _: FakeDoc())
+    monkeypatch.setattr(layout_typography.pymupdf, "open", lambda _: FakeDoc())
     assert "circled_number_bold" in _rules(layout_typography.scan_pdf(pdf, {}))
 
 
 def test_unusual_wrap_fixture_fails_targeted_rules(tmp_path, monkeypatch):
     pdf = _pdf(tmp_path / "wrap.pdf", lambda page: page.insert_text((30, 40), "placeholder"))
     class FakePage:
-        rect = fitz.Rect(0, 0, 300, 180)
+        rect = pymupdf.Rect(0, 0, 300, 180)
         def get_text(self, kind):
             return {"blocks": [{"type": 0, "lines": [
                 {"bbox": [10, 10, 30, 20], "spans": [_raw_span("（", [10, 10, 30, 20])]},
@@ -166,7 +166,7 @@ def test_unusual_wrap_fixture_fails_targeted_rules(tmp_path, monkeypatch):
     class FakeDoc:
         def __enter__(self): return [FakePage()]
         def __exit__(self, *args): return False
-    monkeypatch.setattr(layout_typography.fitz, "open", lambda _: FakeDoc())
+    monkeypatch.setattr(layout_typography.pymupdf, "open", lambda _: FakeDoc())
     rules = _rules(layout_typography.scan_pdf(pdf, {}))
     assert {"opening_bracket_at_line_end", "closing_bracket_at_line_start", "orphan_particle_or_punctuation", "circled_number_separated"} <= rules
 
@@ -622,14 +622,14 @@ def test_declared_zero_source_images_skips_renderer_rasterized_shape_blocks(tmp_
     pdf = tmp_path / "rasterized-shape.pdf"
     pdf.write_bytes(b"%PDF-fake-fixture")
     class FakePage:
-        rect = fitz.Rect(0, 0, 300, 180)
+        rect = pymupdf.Rect(0, 0, 300, 180)
         def get_text(self, kind):
             assert kind == "rawdict"
             return {"blocks": [{"type": 1, "bbox": [10, 10, 290, 170]}]}
     class FakeDoc:
         def __enter__(self): return [FakePage()]
         def __exit__(self, *args): return False
-    monkeypatch.setattr(layout_typography.fitz, "open", lambda _: FakeDoc())
+    monkeypatch.setattr(layout_typography.pymupdf, "open", lambda _: FakeDoc())
     result = layout_typography.scan_pdf(pdf, {"required": True, "source_image_count": 0})
     assert result["status"] == "pass" and result["issues"] == []
 
@@ -772,12 +772,12 @@ def test_line_spacing_shadow_enforced_hash_and_boundary(tmp_path, monkeypatch):
     manifest.write_text(json.dumps({"schema_version": "docs-line-spacing-candidates-1", "artifact_sha256": common.sha256(pdf),
                                     "candidates": [base_candidate]}), encoding="utf-8")
     class FakePage:
-        rect = fitz.Rect(0, 0, 300, 180)
+        rect = pymupdf.Rect(0, 0, 300, 180)
         def get_text(self, kind): return {"blocks": []}
     class FakeDoc:
         def __enter__(self): return [FakePage()]
         def __exit__(self, *args): return False
-    monkeypatch.setattr(layout_typography.fitz, "open", lambda _: FakeDoc())
+    monkeypatch.setattr(layout_typography.pymupdf, "open", lambda _: FakeDoc())
     shadow = layout_typography.scan_pdf(pdf, {"required": True, "line_spacing_policy": _line_policy("shadow", manifest)})
     assert shadow["status"] == "pass" and shadow["issues"] == [] and shadow["line_spacing_evidence"]["candidate_count"] == 1
     enforced = layout_typography.scan_pdf(pdf, {"required": True, "line_spacing_policy": _line_policy("enforced", manifest)})

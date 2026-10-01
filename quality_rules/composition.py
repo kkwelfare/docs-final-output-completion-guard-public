@@ -7,7 +7,7 @@ from itertools import combinations
 from pathlib import Path
 from typing import Any
 
-import fitz
+import pymupdf
 
 try:
     from . import semantic_surface
@@ -214,7 +214,7 @@ def _line_boxes(artifact: Path) -> dict[int, list[list[float]]]:
 def _pdf_line_records(artifact: Path) -> dict[int, list[dict[str, Any]]]:
     """Extract body-free PDF line geometry with stable page/block/line ids."""
     result: dict[int, list[dict[str, Any]]] = {}
-    with fitz.open(artifact) as pdf:
+    with pymupdf.open(artifact) as pdf:
         for page_no, page in enumerate(pdf, start=1):
             lines: list[dict[str, Any]] = []
             for block_no, block in enumerate(page.get_text("dict").get("blocks", [])):

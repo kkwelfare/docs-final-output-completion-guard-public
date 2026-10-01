@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-import fitz
+import pymupdf
 
 from . import repair_controller
 
@@ -46,8 +46,8 @@ def render_source(source_path: Path, artifact_path: Path, plan_path: Path, *, sp
         raise ValueError("render split index is invalid")
     lines = [" ".join(words[:split]), " ".join(words[split:])]
     artifact = artifact_path.resolve(); artifact.parent.mkdir(parents=True, exist_ok=True)
-    doc = fitz.open(); page = doc.new_page(width=620, height=180)
-    rect = fitz.Rect(30, 35, 590, 100)
+    doc = pymupdf.open(); page = doc.new_page(width=620, height=180)
+    rect = pymupdf.Rect(30, 35, 590, 100)
     result = page.insert_textbox(rect, "\n".join(lines), fontsize=9, fontname="helv", lineheight=1.35)
     if result < 0:
         doc.close(); raise ValueError("generic producer text did not fit")

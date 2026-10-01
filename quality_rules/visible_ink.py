@@ -12,7 +12,7 @@ import math
 from pathlib import Path
 from typing import Any, Iterable
 
-import fitz
+import pymupdf
 from PIL import Image, ImageChops, ImageDraw
 
 SCHEMA_VERSION = "docs-visible-ink-evidence-1"
@@ -60,8 +60,8 @@ def _union(boxes: Iterable[tuple[float, float, float, float]]) -> tuple[float, f
     return min(x[0] for x in values), min(x[1] for x in values), max(x[2] for x in values), max(x[3] for x in values)
 
 
-def _text_layer_boxes(page: fitz.Page, crop: tuple[float, float, float, float]) -> list[tuple[float, float, float, float]]:
-    clip = fitz.Rect(crop)
+def _text_layer_boxes(page: pymupdf.Page, crop: tuple[float, float, float, float]) -> list[tuple[float, float, float, float]]:
+    clip = pymupdf.Rect(crop)
     boxes: list[tuple[float, float, float, float]] = []
     for block in page.get_text("rawdict", clip=clip).get("blocks", []):
         if block.get("type") != 0:
@@ -79,8 +79,8 @@ def _text_layer_boxes(page: fitz.Page, crop: tuple[float, float, float, float]) 
     return boxes
 
 
-def _drawing_strokes(page: fitz.Page, crop: tuple[float, float, float, float]) -> list[tuple[float, float, float, float]]:
-    clip = fitz.Rect(crop)
+def _drawing_strokes(page: pymupdf.Page, crop: tuple[float, float, float, float]) -> list[tuple[float, float, float, float]]:
+    clip = pymupdf.Rect(crop)
     result: list[tuple[float, float, float, float]] = []
     for drawing in page.get_drawings():
         if drawing.get("color") is None:
@@ -95,7 +95,7 @@ def _drawing_strokes(page: fitz.Page, crop: tuple[float, float, float, float]) -
         # stroke-like drawing envelopes are removed here.
         if raw[2] - raw[0] > width * 4 and raw[3] - raw[1] > width * 4:
             continue
-        expanded = fitz.Rect(raw[0] - width, raw[1] - width, raw[2] + width, raw[3] + width)
+        expanded = pymupdf.Rect(raw[0] - width, raw[1] - width, raw[2] + width, raw[3] + width)
         intersection = expanded & clip
         box = _bbox(tuple(intersection))
         if box is not None:
@@ -151,7 +151,7 @@ def measure_pdf_visible_ink(
         base["ambiguity_reason"] = "visible_ink_input_invalid"
         return base
     try:
-        with fitz.open(path) as document:
+        with pymupdf.open(path) as document:
             if page > len(document):
                 base["ambiguity_reason"] = "visible_ink_page_missing"
                 return base
@@ -161,7 +161,7 @@ def measure_pdf_visible_ink(
             if text_layer_bbox is None:
                 base["ambiguity_reason"] = "visible_ink_text_layer_missing"
                 return base
-            pix = pdf_page.get_pixmap(matrix=fitz.Matrix(float(render_scale), float(render_scale)), alpha=False)
+            pix = pdf_page.get_pixmap(matrix=pymupdf.Matrix(float(render_scale), float(render_scale)), alpha=False)
             image = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
             render_bytes = image.tobytes()
             render_sha = hashlib.sha256(render_bytes).hexdigest()

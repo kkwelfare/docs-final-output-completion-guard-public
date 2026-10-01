@@ -7,7 +7,7 @@ import shutil
 import sys
 from pathlib import Path
 
-import fitz
+import pymupdf
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -31,7 +31,7 @@ def test_checker_calls_existing_provider_and_completion_accepts_bound_owner_read
     guard = _load(ROOT / "__init__.py", "jev_normal_completion_guard")
 
     artifact = tmp_path / "badge.pdf"
-    doc = fitz.open()
+    doc = pymupdf.open()
     page = doc.new_page(width=300, height=180)
     if zero_candidates:
         page.insert_text((35, 70), "Structure fixture", fontsize=14)
@@ -202,7 +202,7 @@ def test_checker_calls_existing_provider_and_completion_accepts_bound_owner_read
     assert observation["evaluation_state"] == "evidence_reused"
     if zero_candidates:
         # Full normal checker path with changed bytes and refreshed bindings.
-        replacement = fitz.open()
+        replacement = pymupdf.open()
         replacement.new_page(width=300, height=180).insert_text((35, 70), "Changed fixture", fontsize=14)
         replacement.save(artifact)
         replacement.close()

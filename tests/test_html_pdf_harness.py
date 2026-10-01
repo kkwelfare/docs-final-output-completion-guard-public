@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pytest
 from jsonschema import Draft202012Validator
 
@@ -98,7 +98,7 @@ def test_controlled_html_pdf_uses_canonical_plan_and_pdf_parity(tmp_path):
 def test_top_level_contract_binds_editable_html_while_original_pdf_remains_authoritative(tmp_path):
     checker = _load_checker()
     source_pdf, html_path, plan_path, final_pdf = tmp_path / "original.pdf", tmp_path / "editable.html", tmp_path / "plan.json", tmp_path / "final.pdf"
-    source = fitz.open(); source.new_page().insert_text((36, 36), "Original authority"); source.save(source_pdf); source.close()
+    source = pymupdf.open(); source.new_page().insert_text((36, 36), "Original authority"); source.save(source_pdf); source.close()
     html_pdf_harness.write_controlled_html(
         "ご紹介していく。次のご案内です。", html_path, plan_path,
         frame_id="html-frame", page=1, frame_bbox_pt=(36, 36, 180, 120), margins_pt=(6, 6), font_size_pt=16, max_lines=4,
@@ -161,7 +161,7 @@ def test_pdf_parity_blocks_intended_japanese_line_mismatch(tmp_path, monkeypatch
     class Doc:
         def __enter__(self): return [Page()]
         def __exit__(self, *args): return False
-    monkeypatch.setattr(layout_typography.fitz, "open", lambda _: Doc())
+    monkeypatch.setattr(layout_typography.pymupdf, "open", lambda _: Doc())
     scan = layout_typography.scan_pdf(pdf, {"required": True, "expected_cjk_fonts": ["BIZUDPGothic"], "wrap_plan_receipt": str(plan), "wrap_plan_receipt_sha256": _sha(plan)})
     rules = {issue["rule"] for issue in scan["issues"]}
     assert "planned_break_parity" in rules
@@ -239,7 +239,7 @@ def _render_html_pdf(html_path: Path, pdf_path: Path) -> None:
         "--print-to-pdf=" + str(pdf_path), html_path.as_uri(),
     ], capture_output=True, text=True, timeout=90)
     assert completed.returncode == 0, completed.stderr or completed.stdout
-    with fitz.open(pdf_path) as reopened:
+    with pymupdf.open(pdf_path) as reopened:
         assert len(reopened) == 1
 
 

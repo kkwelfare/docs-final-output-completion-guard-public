@@ -4,7 +4,7 @@ import importlib.util
 import sys
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pytest
 from PIL import Image
 
@@ -23,7 +23,7 @@ def load(name: str, filename: str):
 
 
 def one_page_pdf(path: Path, pages: int = 1) -> Path:
-    doc = fitz.open()
+    doc = pymupdf.open()
     for _ in range(pages):
         page = doc.new_page(width=200, height=100)
         page.insert_text((20, 30), "FAX TEST")

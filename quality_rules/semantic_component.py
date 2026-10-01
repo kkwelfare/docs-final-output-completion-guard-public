@@ -408,7 +408,7 @@ def analyze_pptx_pdf_boundary_contacts(*, execution_contract: Path | dict[str,An
     """Adapt actual PPTX/PDF geometry after binding policy and identity to one live contract."""
     from quality_rules import execution_contract as execution_contract_rules
     from pptx import Presentation
-    import fitz
+    import pymupdf
     contract, errors=execution_contract_rules.load_contract(execution_contract,require_artifacts=True)
     if errors or contract is None:
         raise ValueError("semantic component boundary execution contract is invalid: " + "; ".join(errors))
@@ -424,7 +424,7 @@ def analyze_pptx_pdf_boundary_contacts(*, execution_contract: Path | dict[str,An
     artifact_paths={item["path"] for item in contract["artifacts"]}
     if str(pptx) not in artifact_paths or str(pdf) not in artifact_paths:
         raise ValueError("semantic component boundary PPTX/PDF artifacts are not bound by execution contract")
-    presentation=Presentation(pptx); document=fitz.open(pdf)
+    presentation=Presentation(pptx); document=pymupdf.open(pdf)
     if len(presentation.slides)!=len(document):
         raise ValueError("semantic component PPTX/PDF page identity drift")
     selected=list(range(len(document))) if page_indexes is None else page_indexes

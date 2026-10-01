@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import fitz
+import pymupdf
 from PIL import Image, ImageStat
 
 try:
@@ -302,11 +302,11 @@ def build_manifest(
     renderer: dict[str, str]
     if suffix == ".pdf":
         renderer = {"checker_id": "pymupdf-fixed-2x-rgba"}
-        with fitz.open(artifact) as document:
+        with pymupdf.open(artifact) as document:
             if len(document) < 1:
                 raise ValueError("PDF has no pages")
             for index, page in enumerate(document):
-                pixmap = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False, colorspace=fitz.csRGB)
+                pixmap = page.get_pixmap(matrix=pymupdf.Matrix(2, 2), alpha=False, colorspace=pymupdf.csRGB)
                 image_path = evidence_dir / f"{artifact.name}.delivery-page-{index + 1:04d}.png"
                 pixmap.save(str(image_path))
                 renders.append(_image_record(image_path, page=index + 1))
@@ -603,13 +603,13 @@ def validate_handle(
             seen_pages.add(page)
     if suffix == ".pdf":
         try:
-            with fitz.open(artifact) as document:
+            with pymupdf.open(artifact) as document:
                 if seen_pages != set(range(1, len(document) + 1)):
                     return ["AQ-DELIVERY-01: PDF rendered page coverage mismatch"]
                 if renderer.get("checker_id") != "pymupdf-fixed-2x-rgba":
                     return ["AQ-DELIVERY-01: PDF deterministic renderer provenance mismatch"]
                 for index, page in enumerate(document, start=1):
-                    pixmap = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False, colorspace=fitz.csRGB)
+                    pixmap = page.get_pixmap(matrix=pymupdf.Matrix(2, 2), alpha=False, colorspace=pymupdf.csRGB)
                     expected = hashlib.sha256(Image.frombytes("RGB", (pixmap.width, pixmap.height), pixmap.samples).convert("RGBA").tobytes()).hexdigest()
                     recorded = next(item for item in renders if item.get("page") == index)
                     if recorded.get("width") != pixmap.width or recorded.get("height") != pixmap.height or recorded.get("pixel_sha256") != expected:

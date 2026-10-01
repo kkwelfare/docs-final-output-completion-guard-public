@@ -1,6 +1,8 @@
 name: docs-final-output-completion-guard
 version: "1.2.0"
 description: "Blocks docs completion unless deterministic local quality, finalization, review, and receiver readbacks agree; ships an optional host adapter for portable verification."
+python_dependencies:
+  - "PyMuPDF>=1.28.2,<2"
 provides_tools:
   - docs_jev_post_render_review
 hooks:

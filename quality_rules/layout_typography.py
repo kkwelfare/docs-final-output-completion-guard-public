@@ -13,7 +13,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-import fitz
+import pymupdf
 
 from . import content_blocks, cjk_font_selector, safe_wrap
 
@@ -66,7 +66,7 @@ def _union_bbox(items: list[dict[str, Any]]) -> list[float]:
     return [round(min(box[0] for box in boxes), 3), round(min(box[1] for box in boxes), 3), round(max(box[2] for box in boxes), 3), round(max(box[3] for box in boxes), 3)]
 
 
-def _badge_text_interference_candidates(page: fitz.Page, page_no: int,
+def _badge_text_interference_candidates(page: pymupdf.Page, page_no: int,
                                         blocks: list[dict[str, Any]],
                                         renders: dict[int, dict[str, Any]]) -> list[dict[str, Any]]:
     """Find text touching small filled Bezier circles, excluding enclosed labels."""
@@ -79,9 +79,9 @@ def _badge_text_interference_candidates(page: fitz.Page, page_no: int,
         if not isinstance(drawing, dict) or drawing.get("fill") is None:
             continue
         raw_rect = drawing.get("rect")
-        if not isinstance(raw_rect, fitz.Rect):
+        if not isinstance(raw_rect, pymupdf.Rect):
             continue
-        circle = fitz.Rect(raw_rect)
+        circle = pymupdf.Rect(raw_rect)
         width, height = float(circle.width), float(circle.height)
         if (width < 8 or height < 8 or max(width, height) > 36
                 or min(width, height) <= 0 or max(width, height) / min(width, height) > 1.3):
@@ -90,9 +90,9 @@ def _badge_text_interference_candidates(page: fitz.Page, page_no: int,
         if not isinstance(items, (list, tuple)) or sum(bool(item) and item[0] == "c" for item in items) < 4:
             continue
         circle_box = tuple(float(v) for v in circle)
-        padded = fitz.Rect(circle.x0 - 5, circle.y0 - 5, circle.x1 + 5, circle.y1 + 5)
+        padded = pymupdf.Rect(circle.x0 - 5, circle.y0 - 5, circle.x1 + 5, circle.y1 + 5)
         for item in blocks:
-            text_box = fitz.Rect(item["bbox"])
+            text_box = pymupdf.Rect(item["bbox"])
             # A number/label fully enclosed by the badge is intentional content.
             if circle.contains(text_box):
                 continue
@@ -513,7 +513,7 @@ def scan_pdf(artifact: Path, config: dict[str, Any], *, render_manifest: Path | 
                 "status": "pass" if relation.get("relation_pass") is True else "block",
             })
     first_cjk_page: int | None = None
-    with fitz.open(artifact) as pdf:
+    with pymupdf.open(artifact) as pdf:
         for page_no, page in enumerate(pdf, start=1):
             blocks: list[dict[str, Any]] = []
             for block_i, block in enumerate(page.get_text("rawdict").get("blocks", [])):

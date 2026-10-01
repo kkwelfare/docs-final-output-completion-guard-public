@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from jsonschema import Draft202012Validator
-import fitz
+import pymupdf
 import os
 import time
 import math
@@ -201,7 +201,7 @@ def prepare_raw_scan(scan: dict, source_scan: dict, surface_hard: list[dict]) ->
 PDF_REGION_EPSILON_PT = 0.005  # Half of the scanner's two-decimal point unit.
 
 
-def normalize_pdf_region(page_rect: fitz.Rect, bbox: list) -> tuple[fitz.Rect, dict]:
+def normalize_pdf_region(page_rect: pymupdf.Rect, bbox: list) -> tuple[pymupdf.Rect, dict]:
     """Clamp only bounded serialization overflow; never rewrite bound evidence."""
     if (not isinstance(bbox, (list, tuple)) or len(bbox) != 4
             or any(isinstance(v, bool) or not isinstance(v, (int, float))
@@ -217,7 +217,7 @@ def normalize_pdf_region(page_rect: fitz.Rect, bbox: list) -> tuple[fitz.Rect, d
         raise PostRenderError("invalid_request")
     normalized = [max(x0, page_rect.x0), max(y0, page_rect.y0),
                   min(x1, page_rect.x1), min(y1, page_rect.y1)]
-    region = fitz.Rect(normalized)
+    region = pymupdf.Rect(normalized)
     if region.is_empty or not page_rect.contains(region):
         raise PostRenderError("invalid_request")
     return region, {"epsilon_pt": PDF_REGION_EPSILON_PT,
@@ -227,7 +227,7 @@ def normalize_pdf_region(page_rect: fitz.Rect, bbox: list) -> tuple[fitz.Rect, d
 
 def measure_pdf(artifact: Path, page_number: int, bbox: list) -> dict:
     """Recompute from PDF bytes; never include body or literal font names."""
-    with fitz.open(artifact) as doc:
+    with pymupdf.open(artifact) as doc:
         if not doc.is_pdf or page_number < 1 or page_number > len(doc):
             raise PostRenderError("invalid_request")
         page = doc[page_number - 1]
@@ -237,7 +237,7 @@ def measure_pdf(artifact: Path, page_number: int, bbox: list) -> dict:
         lines = []
         for block in page.get_text("dict")["blocks"]:
             for line in block.get("lines", []):
-                box = fitz.Rect(line["bbox"])
+                box = pymupdf.Rect(line["bbox"])
                 if not box.intersects(region):
                     continue
                 spans = line.get("spans", [])
@@ -270,14 +270,14 @@ def measure_candidate(artifact: Path, candidate: dict) -> dict:
                 and isinstance(text_box, list) and len(text_box) == 4):
             raise PostRenderError("invalid_request")
         try:
-            with fitz.open(artifact) as doc:
+            with pymupdf.open(artifact) as doc:
                 page = doc[candidate["page"] - 1]
                 circles = []
                 for drawing in page.get_drawings():
                     raw = drawing.get("rect") if isinstance(drawing, dict) else None
-                    if drawing.get("fill") is None or not isinstance(raw, fitz.Rect):
+                    if drawing.get("fill") is None or not isinstance(raw, pymupdf.Rect):
                         continue
-                    rect = fitz.Rect(raw)
+                    rect = pymupdf.Rect(raw)
                     curves = sum(bool(item) and item[0] == "c" for item in drawing.get("items", []))
                     if (curves >= 4 and rect.width >= 8 and rect.height >= 8
                             and max(rect.width, rect.height) <= 36
@@ -290,9 +290,9 @@ def measure_candidate(artifact: Path, candidate: dict) -> dict:
                 ]
                 if circle_box not in circles or text_box not in lines:
                     raise PostRenderError("identity_drift")
-                circle = fitz.Rect(circle_box)
-                text = fitz.Rect(text_box)
-                if circle.contains(text) or not fitz.Rect(circle.x0-5, circle.y0-5, circle.x1+5, circle.y1+5).intersects(text):
+                circle = pymupdf.Rect(circle_box)
+                text = pymupdf.Rect(text_box)
+                if circle.contains(text) or not pymupdf.Rect(circle.x0-5, circle.y0-5, circle.x1+5, circle.y1+5).intersects(text):
                     raise PostRenderError("identity_drift")
                 metrics["badge_text_interference"] = {
                     "circle_bbox_pdf_points": circle_box,
@@ -346,7 +346,7 @@ def measure_whole_artifact(artifact: Path) -> dict[str, Any]:
     rotated_pages = 0
     size_pairs: set[tuple[float, float]] = set()
     try:
-        with fitz.open(artifact) as doc:
+        with pymupdf.open(artifact) as doc:
             if not doc.is_pdf or doc.is_encrypted or len(doc) < 1:
                 raise PostRenderError("invalid_request")
             if len(doc) > MAX_WHOLE_ARTIFACT_PAGES:
@@ -361,13 +361,13 @@ def measure_whole_artifact(artifact: Path) -> dict[str, Any]:
                 size_pairs.add((round(width, 4), round(height, 4)))
                 rotation = int(page.rotation)
                 rotated_pages += int(rotation != 0)
-                page_lines: list[tuple[fitz.Rect, list[dict[str, Any]]]] = []
+                page_lines: list[tuple[pymupdf.Rect, list[dict[str, Any]]]] = []
                 page_spans = 0
                 page_characters = 0
                 data = page.get_text("dict")
                 for block in data.get("blocks", []):
                     for line in block.get("lines", []):
-                        box = fitz.Rect(line["bbox"])
+                        box = pymupdf.Rect(line["bbox"])
                         spans = line.get("spans", [])
                         page_lines.append((box, spans))
                         page_spans += len(spans)

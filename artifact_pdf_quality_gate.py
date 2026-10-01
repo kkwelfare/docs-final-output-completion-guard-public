@@ -29,7 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-import fitz
+import pymupdf
 
 try:
     from quality_rules import layout_typography
@@ -133,7 +133,7 @@ def _number(value: Any) -> bool:
 
 
 def _bbox(value: Any) -> list[float] | None:
-    if isinstance(value, fitz.Rect):
+    if isinstance(value, pymupdf.Rect):
         value = list(value)
     if not isinstance(value, (list, tuple)) or len(value) != 4 or not all(_number(item) for item in value):
         return None
@@ -277,7 +277,7 @@ def _extract_pdf(artifact: Path) -> tuple[list[dict[str, Any]], list[dict[str, A
     image_regions: list[dict[str, Any]] = []
     pages: dict[int, dict[str, Any]] = {}
     drawings: dict[int, list[dict[str, Any]]] = defaultdict(list)
-    with fitz.open(artifact) as document:
+    with pymupdf.open(artifact) as document:
         for page_no, page in enumerate(document, start=1):
             page_width, page_height = float(page.rect.width), float(page.rect.height)
             pages[page_no] = {"page": page_no, "width_pt": round(page_width, 3), "height_pt": round(page_height, 3)}
@@ -1047,7 +1047,7 @@ def main(argv: list[str] | None = None) -> int:
         result = verify_receipt(args.pdf, args.receipt, policy_path=args.policy)
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
         return 0 if result.get("valid") else 2
-    except (OSError, ValueError, fitz.FileDataError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError, pymupdf.FileDataError, json.JSONDecodeError) as exc:
         print(json.dumps({"status": "unsupported", "error": type(exc).__name__, "message": str(exc)}, ensure_ascii=False))
         return 2
 

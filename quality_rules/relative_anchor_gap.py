@@ -292,20 +292,20 @@ def measure_pdf(*, artifact: Path, page: int, avatar_search_bbox_pdf_points: Any
                 tail_tip_pdf_points: Any, direction_vector: Any, target_gap_ratio: Any,
                 tolerance: Any, facing_expected: str, facing_actual: str, no_contact: bool,
                 contact_tolerance_pt: Any, render_scale: float = 4.0, alpha_threshold: int = 8) -> dict[str, Any]:
-    import fitz
+    import pymupdf
     artifact = artifact.resolve(strict=True)
     search = _bbox(avatar_search_bbox_pdf_points, "avatar_search_bbox_pdf_points")
     scale = _number(render_scale, "render_scale", positive=True)
     if isinstance(page, bool) or not isinstance(page, int) or page < 1:
         raise ValueError("page is invalid")
-    with fitz.open(artifact) as document:
+    with pymupdf.open(artifact) as document:
         if page > len(document):
             raise ValueError("page is outside PDF")
         pdf_page = document[page - 1]
-        rect = fitz.Rect(*search)
+        rect = pymupdf.Rect(*search)
         if not pdf_page.rect.contains(rect):
             raise ValueError("avatar search bbox is outside PDF page")
-        pix = pdf_page.get_pixmap(matrix=fitz.Matrix(scale, scale), clip=rect, alpha=True)
+        pix = pdf_page.get_pixmap(matrix=pymupdf.Matrix(scale, scale), clip=rect, alpha=True)
         image = Image.frombytes("RGBA", (pix.width, pix.height), pix.samples)
         visible = visible_alpha_bbox(image, alpha_threshold=alpha_threshold)
     bbox = (search[0] + visible[0] / scale, search[1] + visible[1] / scale,

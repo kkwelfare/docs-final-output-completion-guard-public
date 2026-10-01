@@ -12,7 +12,7 @@ import math
 from pathlib import Path
 from typing import Any
 
-import fitz
+import pymupdf
 
 from quality_rules import execution_contract, rendered_readback, safe_wrap, universal_visible_text_contract
 
@@ -636,7 +636,7 @@ def _point_inside(bbox: tuple[float, float, float, float], frame_bbox: list[floa
     return x - .5 <= center_x <= x + width + .5 and y - .5 <= center_y <= y + height + .5
 
 
-def _rendered_frame_lines(page: fitz.Page, frame: dict[str, Any]) -> list[dict[str, Any]]:
+def _rendered_frame_lines(page: pymupdf.Page, frame: dict[str, Any]) -> list[dict[str, Any]]:
     glyph_lines: list[dict[str, Any]] = []
     for block in page.get_text("rawdict").get("blocks", []):
         if block.get("type") != 0:
@@ -683,7 +683,7 @@ def _bbox_union(boxes: list[list[float]]) -> tuple[float, float, float, float] |
             max(box[2] for box in boxes), max(box[3] for box in boxes))
 
 
-def _surface_candidates(page: fitz.Page, target_kind: str) -> list[tuple[float, float, float, float]]:
+def _surface_candidates(page: pymupdf.Page, target_kind: str) -> list[tuple[float, float, float, float]]:
     candidates: list[tuple[float, float, float, float]] = []
     if target_kind == "image":
         for block in page.get_text("rawdict").get("blocks", []):
@@ -700,7 +700,7 @@ def _surface_candidates(page: fitz.Page, target_kind: str) -> list[tuple[float, 
     return candidates
 
 
-def _match_surface(page: fitz.Page, relation: dict[str, Any]) -> tuple[float, float, float, float] | None:
+def _match_surface(page: pymupdf.Page, relation: dict[str, Any]) -> tuple[float, float, float, float] | None:
     expected = _xyxy(relation["target_bbox_pt"])
     candidates = _surface_candidates(page, relation["target_kind"])
     if not candidates:
@@ -728,7 +728,7 @@ def scan_rendered_pdf_boundaries(pdf_path: Path, frames: list[dict[str, Any]]) -
     """Read real PDF glyph positions and classify every same-paragraph line join."""
     frame_results: list[dict[str, Any]] = []
     reasons: list[str] = []
-    with fitz.open(pdf_path) as document:
+    with pymupdf.open(pdf_path) as document:
         for frame in frames:
             page_number = frame.get("page")
             if not isinstance(page_number, int) or page_number < 1 or page_number > len(document):
@@ -1013,7 +1013,7 @@ def _semantic_surface_records(plan_log_path: Path) -> list[dict[str, Any]]:
     return records
 
 
-def _drawing_measurement(page: fitz.Page, bbox: list[float]) -> dict[str, Any]:
+def _drawing_measurement(page: pymupdf.Page, bbox: list[float]) -> dict[str, Any]:
     expected = tuple(map(float, bbox))
     candidates: list[tuple[float, dict[str, Any], tuple[float, float, float, float]]] = []
     try:
@@ -1127,7 +1127,7 @@ def finalize_html_semantic_surfaces(
     regions: list[dict[str, Any]] = []
     hard_failures: list[dict[str, Any]] = []
     pages: list[dict[str, Any]] = []
-    with fitz.open(pdf_path) as document:
+    with pymupdf.open(pdf_path) as document:
         for page_index, page in enumerate(document):
             pages.append({"page": page_index + 1,
                           "page_size_pt": [round(page.rect.width, 3), round(page.rect.height, 3)]})

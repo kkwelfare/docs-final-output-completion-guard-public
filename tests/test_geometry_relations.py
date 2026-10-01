@@ -6,7 +6,7 @@ import json
 import math
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pytest
 from jsonschema import Draft202012Validator
 
@@ -31,7 +31,7 @@ def _block(identifier: str, bbox: list[float], *, parent: str | None = None, kin
 def _base(tmp_path: Path, blocks: list[dict], relations: list[dict]) -> tuple[dict, Path, dict]:
     source = tmp_path / "source.svg"; source.write_text("<svg/>", encoding="utf-8")
     artifact = tmp_path / "artifact.pdf"
-    doc = fitz.open(); doc.new_page(width=300, height=200); doc.save(artifact); doc.close()
+    doc = pymupdf.open(); doc.new_page(width=300, height=200); doc.save(artifact); doc.close()
     manifest = {
         "schema_version": "docs-content-block-evidence-1",
         "producer_run_id": 42,

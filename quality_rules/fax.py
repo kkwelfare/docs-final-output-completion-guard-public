@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-import fitz
+import pymupdf
 from PIL import Image
 
 from .common import contains_forbidden_key, sha256
@@ -144,7 +144,7 @@ def validate_entry(contract: dict[str, Any], entry: Any) -> list[str]:
             paths[rule_id] = path
 
     try:
-        with fitz.open(artifact) as document:
+        with pymupdf.open(artifact) as document:
             if len(document) != 1:
                 errors.append("FAX-RENDER-01: FAX PDF must be one page")
                 expected_original = None

@@ -307,9 +307,9 @@ def _render_bbox(block: dict[str, Any]) -> tuple[float, float, float, float] | N
 
 def _actual_visible_elements(artifact: Path, kinds: set[str]) -> list[dict[str, Any]]:
     """Inventory PDF primitives without retaining extracted body text."""
-    import fitz
+    import pymupdf
     rows: list[dict[str, Any]] = []
-    with fitz.open(artifact) as document:
+    with pymupdf.open(artifact) as document:
         for page_no, page in enumerate(document, start=1):
             blocks = page.get_text("dict").get("blocks", [])
             if "text" in kinds:
@@ -1023,8 +1023,8 @@ def _coalesce(issues: list[dict[str, Any]], artifact: Path, max_groups: int) -> 
 
 def _page_sizes(artifact: Path) -> dict[int, tuple[float, float]]:
     try:
-        import fitz
-        with fitz.open(artifact) as document:
+        import pymupdf
+        with pymupdf.open(artifact) as document:
             return {index: (float(page.rect.width), float(page.rect.height)) for index, page in enumerate(document, start=1)}
     except Exception:
         return {}
