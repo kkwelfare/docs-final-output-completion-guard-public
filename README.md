@@ -6,7 +6,7 @@ This archive is a quality-portable backup, not a full environment recovery image
 
 ## What is portable
 
-- `canonical_checker/` contains the MIT-covered `filter_core.py`, `check_document.py`, plugin metadata, and copied portable checker tests. The checker is local, deterministic, fail-open only where its rules require ambiguity preservation, and never calls a provider.
+- `canonical_checker/` is the portable, vendored copy of the public `kkwelfare/final-output-local-filter` v1.0.0 package (`filter_core.py`, `check_document.py`, `plugin.yaml`, MIT license, and tests). It is resolved relative to this repository/package, never from a sibling profile or machine-local plugin root. The checker is deterministic, fail-open only where its rules require ambiguity preservation, and never calls a provider.
 - The candidate plugin runtime, quality rules, schemas, and portable tests are preserved from the verified local baseline under the repository root.
 - `portable/` exposes a small public producer core, typed body-free evidence boundary, format adapters, deterministic fake-renderer contract, and host adapter. The local checker result is authoritative; a renderer cannot turn a local block into a pass.
 - `presets/` contains the versioned `docs-style-default-v1` and `docs-style-compact-v1` presets plus `docs-quality-ruleset-v3`. Producer receipts bind the preset/ruleset identifiers and SHA-256 values.
@@ -28,7 +28,9 @@ The default manifest-free route uses the bundled checker and `FakeRenderer`. The
 
 ## Plugin generated-artifact review
 
-For eligible PDFs, the plugin's `generated_artifact_jev.run` route makes one live evaluation attempt. When candidate count is zero, it uses a whole-artifact structural summary. Bound evidence is reused only while its artifact identity and supporting state remain unchanged. The owner scan stays byte-stable; execution details are recorded separately. Failure, uncertainty, or low confidence is not a pass: deterministic checks and the existing owner/completion path retain acceptance authority. The request is metrics-only; it does not include document body text or page pixels.
+For eligible PDFs, the plugin's `generated_artifact_jev.run` route supports one bounded evaluation attempt when its caller explicitly enables the live route and a supported provider key is available. When candidate count is zero, it uses a whole-artifact structural summary. Bound evidence is reused only while its artifact identity and supporting state remain unchanged. The owner scan stays byte-stable; execution details are recorded separately. Failure, uncertainty, or low confidence is not a pass: deterministic checks and the existing owner/completion path retain acceptance authority. The request is metrics-only; it does not include document body text or page pixels.
+
+The existing public layout Jev repository is an optional, separate Hermes plugin: https://github.com/kkwelfare/jev-route-screening-public, pinned interoperability reference `9e2d276c2e2aa6ff5b4b547b31aa100c9695f11e` (`master` at publication). It exposes its documented Hermes tools/hooks (including `jev_bridge_review`); it is not imported as a Python package and does not define this guard's PDF-classification API. This guard's optional PDF advisory uses the explicit TypeSafe SystemOne decisions request contract in `quality_rules/jev_overlap.py`, with a bounded OpenRouter route only under that module's existing permitted fallback conditions. The Jev result is advisory; local deterministic quality rules remain authoritative. This describes an optional producer/host integration, not a universal completion enforcement claim. No provider call is made by the offline tests or plugin load validation.
 
 ## Format and evidence boundary
 

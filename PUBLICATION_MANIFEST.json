@@ -8,8 +8,8 @@
   },
   "quality_portability": {
     "authoritative_route": "bundled canonical checker plus docs-quality-ruleset-v3",
-    "canonical_checker_root": "canonical_checker/",
-    "canonical_checker_files": ["check_document.py", "filter_core.py", "tests/test_filter_core.py"],
+    "canonical_checker_root": "canonical_checker/ (vendored from public repository kkwelfare/final-output-local-filter, version 1.0.0)",
+    "canonical_checker_files": ["LICENSE", "check_document.py", "filter_core.py", "plugin.yaml", "tests/test_filter_core.py"],
     "provider_route": "optional advisory only; never authoritative",
     "image_transport": "forbidden",
     "typed_evidence_boundary": "docs-typed-evidence-boundary-1"
@@ -39,7 +39,13 @@
   },
   "source_lineage": {
     "live_plugin": "current docs plugin inspected read-only; candidate is not a byte-for-byte mirror",
-    "canonical_checker": "canonical final-output-local-filter source copied into canonical_checker/",
+    "canonical_checker": "public kkwelfare/final-output-local-filter v1.0.0 source vendored; resolved within this package",
+    "jev_interoperability": {
+      "repository": "https://github.com/kkwelfare/jev-route-screening-public",
+      "pinned_ref": "9e2d276c2e2aa6ff5b4b547b31aa100c9695f11e",
+      "contract": "documented Hermes bridge tools/hooks are a distinct optional host plugin; PDF advisory uses the guard's TypeSafe decisions wire contract and existing bounded fallback",
+      "automatic_install_or_provider_call": false
+    },
     "producer_inputs": "public portable seam derived from quality rules and host contract; profile-local producer paths are not embedded"
   },
   "excluded_classes": [
