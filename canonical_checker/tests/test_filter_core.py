@@ -104,6 +104,27 @@ def test_mixed_markdown_protected_regions_are_byte_stable_while_prose_changes():
     assert result.rules == ("F1", "F1")
 
 
+def test_fences_require_matching_marker_and_valid_closing_length_and_tail():
+    cases = (
+        ("```py\n必要なら code を確認できます。\n````\n必要なら prose を確認できます。", "```py\n必要なら code を確認できます。\n````\nprose を確認できます。", ("F1",)),
+        ("````py\n必要なら code を確認できます。\n```\n必要なら prose を確認できます。", "````py\n必要なら code を確認できます。\n```\n必要なら prose を確認できます。", ()),
+        ("~~~py\n必要なら code を確認できます。\n```\n必要なら prose を確認できます。", "~~~py\n必要なら code を確認できます。\n```\n必要なら prose を確認できます。", ()),
+        ("```py\n必要なら code を確認できます。\n``` trailing\n必要なら prose を確認できます。", "```py\n必要なら code を確認できます。\n``` trailing\n必要なら prose を確認できます。", ()),
+    )
+    for text, expected, expected_rules in cases:
+        result = filter_text(text)
+        assert result.text == expected
+        assert "必要なら code を確認できます。" in result.text
+        assert result.rules == expected_rules
+
+
+def test_unclosed_fence_keeps_following_content_protected():
+    text = "```py\n必要なら code を確認できます。\n必要なら still_code を確認できます。"
+    result = filter_text(text)
+    assert result.text == text
+    assert result.rules == ()
+
+
 def test_document_mode_has_segment_local_rollback_and_global_cap():
     capped_segment = "必要ならAを確認できます。必要ならBを確認できます。必要ならCを確認できます。"
     other = "必要ならDを確認できます。"

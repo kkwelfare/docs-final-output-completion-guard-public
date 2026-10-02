@@ -101,14 +101,24 @@ def produce(request: ProducerRequest, *, renderer: Renderer | None = None) -> di
     inspection = inspect_source(source)
     host = HostAdapter.from_manifest(request.host_manifest, candidate_root=_package_root())
     checker, checker_sha, core_sha = _checker_summary(host, inspection)
+    invalid_container = (
+        inspection.structural_facts.get("renderer_required") is True
+        and inspection.structural_facts.get("valid_container") is False
+    )
+    if invalid_container:
+        checker = {**checker, "status": "block", "structural_error": "invalid_document_container"}
     local_rule_ids = list(dict.fromkeys([*ruleset["rule_ids"], *checker["rule_ids"]]))
     style_sha = sha256_path(style_path)
     ruleset_sha = sha256_path(ruleset_path)
     status = "pass" if checker["status"] == "pass" else "block"
     renderer_impl = renderer or FakeRenderer()
+    unverified_container_render = (
+        inspection.structural_facts.get("renderer_required") is True
+        and isinstance(renderer_impl, FakeRenderer)
+    )
     rendered: dict[str, Any]
     render_hash: str | None = None
-    if status == "pass":
+    if status == "pass" and not invalid_container:
         plan = RenderPlan(
             format_name=inspection.format_name,
             source_sha256=inspection.source_sha256,
@@ -125,6 +135,9 @@ def produce(request: ProducerRequest, *, renderer: Renderer | None = None) -> di
             "artifact": artifact.as_dict(),
         }
         render_hash = artifact.sha256
+        if isinstance(renderer_impl, FakeRenderer):
+            rendered["status"] = "not_verified"
+            rendered["verification"] = "fake renderer emitted metadata only; document display not verified"
     else:
         rendered = {
             "status": "skipped",
@@ -144,6 +157,8 @@ def produce(request: ProducerRequest, *, renderer: Renderer | None = None) -> di
         provider_mode=host.provider_mode,
         image_transport="forbidden",
     ).as_dict()
+    if status == "pass" and unverified_container_render:
+        status = "not_verified"
     receipt: dict[str, Any] = {
         "schema_version": PRODUCER_SCHEMA_VERSION,
         "status": status,

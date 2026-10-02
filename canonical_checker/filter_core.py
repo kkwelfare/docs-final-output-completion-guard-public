@@ -34,7 +34,7 @@ INLINE_PROTECTED = re.compile(
     r"(?:^|(?<=\s))(?:/[\w.~:-]+(?:/[\w.~:-]+)*|[A-Za-z]:\\[^\s<>|]*)|MEDIA:\S*"
 )
 LINE_PREFIX = re.compile(r"^(?P<prefix>\s*(?:#{1,6}\s+|(?:[-*+] |\d+[.)] )))")
-FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
+FENCE = re.compile(r"^\s*(?P<marker>`{3,}|~{3,})")
 BLOCKQUOTE = re.compile(r"^\s*>")
 PIPE_TABLE = re.compile(r"^\s*\|.*\|\s*$")
 MEDIA_LINE = re.compile(r"^\s*MEDIA:")
@@ -158,12 +158,15 @@ def _segments(text: str) -> list[tuple[bool, str]]:
         fence = FENCE.match(line)
         if fenced:
             parts.append((True, line))
-            if fence and fence.group(1).startswith(marker):
-                fenced = False
+            if fence:
+                closing = fence.group("marker")
+                remainder = line[fence.end():].rstrip("\r\n")
+                if closing[0] == marker[0] and len(closing) >= len(marker) and not remainder.strip():
+                    fenced = False
             continue
         if fence:
             fenced = True
-            marker = fence.group(1)[0]
+            marker = fence.group("marker")
             parts.append((True, line))
         elif BLOCKQUOTE.match(line) or PIPE_TABLE.match(line) or MEDIA_LINE.match(line):
             parts.append((True, line))

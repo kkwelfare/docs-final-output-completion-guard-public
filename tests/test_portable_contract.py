@@ -9,7 +9,8 @@ from portable.evidence import FORBIDDEN_KEYS, assert_body_free
 from portable.format_adapters import inspect_source
 from portable.host_adapter import HostAdapter
 from portable.producer_core import ProducerRequest, produce
-from portable.renderer_protocol import FakeRenderer, RenderPlan
+from portable.renderer_protocol import FakeRenderer, RenderPlan, RenderedArtifact
+from portable.evidence import sha256_path
 
 
 @pytest.fixture()
@@ -83,6 +84,64 @@ def test_format_adapter_is_explicit_and_structural(tmp_path: Path):
     assert inspection.format_name == "json"
     assert inspection.structural_facts == {"top_level": "object", "key_count": 2, "checker_eligible": False}
     assert inspection.source_sha256 and len(inspection.source_sha256) == 64
+
+
+@pytest.mark.parametrize("suffix,contents", [(".docx", b"not a zip"), (".pdf", b"not a pdf")])
+def test_invalid_document_containers_block_and_skip_fake_renderer(tmp_path: Path, suffix: str, contents: bytes):
+    source = tmp_path / f"broken{suffix}"
+    source.write_bytes(contents)
+    result = produce(ProducerRequest(source, tmp_path / "broken-run"))
+    assert result["status"] == "block"
+    assert result["source"]["structural_facts"]["valid_container"] is False
+    assert result["quality"]["status"] == "block"
+    assert result["renderer"]["status"] == "skipped"
+    assert not (tmp_path / "broken-run" / "render" / "fake-render.json").exists()
+    saved = json.loads(Path(result["receipt_path"]).read_text(encoding="utf-8"))
+    assert saved["status"] == "block"
+
+
+@pytest.mark.parametrize("suffix,contents", [(".docx", b"PK\x03\x04fixture"), (".pdf", b"%PDF-1.7\nfixture")])
+def test_valid_container_with_fake_renderer_is_explicitly_not_verified(tmp_path: Path, suffix: str, contents: bytes):
+    source = tmp_path / f"fixture{suffix}"
+    if suffix == ".docx":
+        import zipfile
+        with zipfile.ZipFile(source, "w") as archive:
+            archive.writestr("word/document.xml", "<document/>")
+    else:
+        source.write_bytes(contents)
+    result = produce(ProducerRequest(source, tmp_path / "run"))
+    assert result["source"]["structural_facts"]["valid_container"] is True
+    assert result["renderer"]["status"] == "not_verified"
+    assert result["status"] == "not_verified"
+    assert result["provider"]["called"] is False
+    saved = json.loads(Path(result["receipt_path"]).read_text(encoding="utf-8"))
+    assert saved["status"] == "not_verified"
+
+
+@pytest.mark.parametrize("suffix,contents", [(".docx", b"PK\x03\x04fixture"), (".pdf", b"%PDF-1.7\nfixture")])
+def test_valid_container_with_protocol_fixture_renderer_passes_as_mock(tmp_path: Path, suffix: str, contents: bytes):
+    class ProtocolFixtureRenderer:
+        name = "protocol-fixture-renderer"
+        contract_version = "docs-renderer-contract-1"
+
+        def render(self, plan: RenderPlan, output_root: Path) -> RenderedArtifact:
+            output_root.mkdir(parents=True, exist_ok=True)
+            target = output_root / "renderer-fixture.json"
+            target.write_text(json.dumps({"renderer": self.name, "plan": plan.as_dict()}), encoding="utf-8")
+            return RenderedArtifact(self.name, target, sha256_path(target), target.stat().st_size)
+
+    source = tmp_path / f"fixture{suffix}"
+    if suffix == ".docx":
+        import zipfile
+        with zipfile.ZipFile(source, "w") as archive:
+            archive.writestr("word/document.xml", "<document/>")
+    else:
+        source.write_bytes(contents)
+    result = produce(ProducerRequest(source, tmp_path / "fixture-run"), renderer=ProtocolFixtureRenderer())
+    assert result["status"] == "pass"
+    assert result["renderer"]["status"] == "pass"
+    assert result["renderer"]["name"] == "protocol-fixture-renderer"
+    assert result["provider"]["called"] is False
 
 
 def test_versioned_compact_preset_can_be_selected(clean_source: Path, tmp_path: Path):
