@@ -27,6 +27,7 @@ def _dump(path: Path, value: dict[str, Any]) -> None:
 def run(*, artifact: Path, scan: dict[str, Any], evidence_dir: Path,
         artifact_set_id: str | None = None, producer: dict[str, Any] | None = None,
         reviewer: dict[str, Any] | None = None,
+        allow_live_provider: bool = False,
         fixture_adapter: Callable | None = None) -> dict[str, Any]:
     """Select, evaluate, persist, and read back the generated-artifact route."""
     if artifact.suffix.lower() != ".pdf":
@@ -76,7 +77,7 @@ def run(*, artifact: Path, scan: dict[str, Any], evidence_dir: Path,
         request = jev_post_render.build_request(
             artifact=artifact, raw_scan=raw_path,
             artifact_set_id=artifact_set_id, producer=producer,
-            reviewer=reviewer, allow_live_provider=True,
+            reviewer=reviewer, allow_live_provider=allow_live_provider,
         )
         # Reuse unchanged, bound evidence during the owner readback pass.
         # Re-evaluating would change receipt timestamps and invalidate the

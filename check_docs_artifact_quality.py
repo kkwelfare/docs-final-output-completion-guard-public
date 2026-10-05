@@ -835,6 +835,8 @@ def build_receipt(
                     artifact_set_id=(fixture_artifact_set_id or finalization_manifest.get("artifact_set_id")
                                      if finalization_manifest else fixture_artifact_set_id),
                     producer=producer_identity, reviewer=reviewer_identity,
+                    allow_live_provider=(isinstance(layout_config, dict)
+                                         and layout_config.get("allow_live_provider") is True),
                     fixture_adapter=jev_fixture_adapter,
                 )
                 # Cache-hit bookkeeping is operational metadata, not a change

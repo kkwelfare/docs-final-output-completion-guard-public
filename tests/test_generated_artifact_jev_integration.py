@@ -79,7 +79,8 @@ def test_checker_calls_existing_provider_and_completion_accepts_bound_owner_read
             "required": True, "measurement_basis": "pdf_points", "minimum_gap_pt": 0,
             "dead_space": {"bottom_blank_ratio_max": 1},
             "narrow_card_exemption_ratio": 0,
-            # No handwritten Jev opt-in: the generated route is automatic.
+            # Explicit permission for an external provider is deliberate.
+            "allow_live_provider": True,
         }},
     }
     # Reuse the existing complete baseline fixture contract/evidence so

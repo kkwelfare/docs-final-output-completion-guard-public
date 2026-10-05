@@ -26,7 +26,7 @@ def pdf_fixture(tmp_path):
             "review_candidate_count": 0, "issues": [], "REVIEW_CANDIDATE": [], "HARD_FAIL": []}
     inputs = dict(artifact=artifact, scan=scan, evidence_dir=tmp_path / "evidence",
                   artifact_set_id="a" * 64, producer={"task_id": "t_producer", "run_id": 1},
-                  reviewer={"task_id": "t_owner", "run_id": 2})
+                  reviewer={"task_id": "t_owner", "run_id": 2}, allow_live_provider=True)
     return artifact, scan, inputs
 
 
@@ -100,6 +100,31 @@ def test_zero_candidates_missing_identity_never_means_reviewed(tmp_path):
     assert result["reason_code"] == "evaluation_identity_unavailable"
     assert result["formal_provider_evidence"] is False
     assert route.validate_readback(scan, result) is None
+
+
+def test_live_provider_permission_is_explicit_and_defaults_false(tmp_path, monkeypatch):
+    artifact, scan, inputs = pdf_fixture(tmp_path)
+    inputs.pop("allow_live_provider")
+    calls = []
+
+    def transport(endpoint, key_env, model, payload, timeout):
+        calls.append(payload)
+        return {"answers": {"artifact_q0": {"choice": "pass", "confidence": 0.95}}}
+
+    monkeypatch.setattr(jev.jev_overlap, "_post_provider", transport)
+    monkeypatch.setenv(jev.jev_overlap.PRIMARY_API_KEY_ENV, "test-only-no-network")
+    without_flag = route.run(**inputs)
+    missing_identity = route.run(**{**inputs, "evidence_dir": tmp_path / "missing-evidence"},
+                                  allow_live_provider=False)
+    explicit_false = route.run(**{**inputs, "evidence_dir": tmp_path / "false-evidence"},
+                               allow_live_provider=False)
+    explicit_true = route.run(**{**inputs, "evidence_dir": tmp_path / "true-evidence"},
+                              allow_live_provider=True)
+    assert without_flag["provider_invoked"] is False
+    assert missing_identity["provider_invoked"] is False
+    assert explicit_false["provider_invoked"] is False
+    assert explicit_true["provider_invoked"] is True
+    assert [len(calls)] == [1]
 
 
 def test_legacy_no_candidates_is_compatibility_not_provider_evidence(tmp_path):
