@@ -126,17 +126,35 @@ class HostAdapter:
         return checker, core
 
     def load_checker(self):
-        checker, _ = self.checker_paths()
-        module_name = "_docs_guard_checker_" + sha256_path(checker)[:16]
+        checker, core = self.checker_paths()
+        checker_hash = sha256_path(checker)
+        core_hash = sha256_path(core)
+        identity = hashlib.sha256(
+            f"{checker.resolve()}|{checker_hash}|{core.resolve()}|{core_hash}".encode("utf-8")
+        ).hexdigest()[:20]
+        package_name = "_docs_guard_checker_" + identity + "_package"
+        module_name = package_name + ".check_document"
         cached = sys.modules.get(module_name)
         if cached is not None:
             return cached
+        package_spec = importlib.util.spec_from_loader(package_name, loader=None, is_package=True)
+        if package_spec is None:
+            raise RuntimeError("cannot create isolated canonical checker package")
+        package = importlib.util.module_from_spec(package_spec)
+        package.__path__ = [str(checker.parent)]
+        sys.modules[package_name] = package
         spec = importlib.util.spec_from_file_location(module_name, checker)
         if spec is None or spec.loader is None:
+            sys.modules.pop(package_name, None)
             raise RuntimeError(f"cannot load canonical checker: {checker}")
         module = importlib.util.module_from_spec(spec)
         sys.modules[module_name] = module
-        spec.loader.exec_module(module)
+        try:
+            spec.loader.exec_module(module)
+        except Exception:
+            sys.modules.pop(module_name, None)
+            sys.modules.pop(package_name, None)
+            raise
         return module
 
     def describe(self) -> dict[str, Any]:

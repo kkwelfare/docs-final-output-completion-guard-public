@@ -38,6 +38,45 @@ def test_default_host_adapter_resolves_bundled_checker_without_machine_paths():
     assert checker.is_file() and core.is_file()
 
 
+def test_checker_cache_isolated_by_checker_and_core_identity(tmp_path: Path):
+    import shutil
+
+    source_root = Path(__file__).resolve().parents[1] / "canonical_checker"
+    roots = []
+    for label, marker in (("one", "cache_one"), ("two", "cache_two")):
+        root = tmp_path / label
+        shutil.copytree(source_root, root)
+        core = root / "filter_core.py"
+        core.write_text(core.read_text(encoding="utf-8") + f"\nCACHE_ROOT_MARKER = {marker!r}\n", encoding="utf-8")
+        roots.append(root)
+
+    def host(root):
+        return HostAdapter.from_manifest(candidate_root=Path(__file__).resolve().parents[1]).__class__(
+            candidate_root=Path(__file__).resolve().parents[1], canonical_checker_root=root,
+            renderer={"kind": "fake", "executable": None, "output_root": None, "network": "disabled"},
+            font_roots=(), task_state_root=None, runtime_root=None, provider_mode="advisory-disabled",
+        )
+
+    first_host, second_host = host(roots[0]), host(roots[1])
+    first = first_host.load_checker()
+    second = second_host.load_checker()
+    assert first is first_host.load_checker()
+    assert second is second_host.load_checker()
+    assert first is not second
+    first_core = __import__("sys").modules[first.filter_text.__module__]
+    second_core = __import__("sys").modules[second.filter_text.__module__]
+    assert first_core.CACHE_ROOT_MARKER == "cache_one"
+    assert second_core.CACHE_ROOT_MARKER == "cache_two"
+
+    core = roots[0] / "filter_core.py"
+    core.write_text(core.read_text(encoding="utf-8") + "\nCACHE_CORE_REVISION = 'changed-core-revision'\n", encoding="utf-8")
+    refreshed = first_host.load_checker()
+    refreshed_core = __import__("sys").modules[refreshed.filter_text.__module__]
+    assert refreshed is not first
+    assert refreshed_core.CACHE_ROOT_MARKER == "cache_one"
+    assert refreshed_core.CACHE_CORE_REVISION == "changed-core-revision"
+
+
 def test_fake_renderer_is_deterministic_and_image_free(tmp_path: Path):
     plan = RenderPlan("md", "a" * 64, 1, "docs-style-default-v1", "docs-quality-ruleset-v3", ("R1",))
     first = FakeRenderer().render(plan, tmp_path / "one")
@@ -116,6 +155,20 @@ def test_valid_container_with_fake_renderer_is_explicitly_not_verified(tmp_path:
     assert result["provider"]["called"] is False
     saved = json.loads(Path(result["receipt_path"]).read_text(encoding="utf-8"))
     assert saved["status"] == "not_verified"
+
+
+def test_not_verified_receipt_matches_public_schema(tmp_path: Path):
+    import jsonschema
+
+    source = tmp_path / "schema-fixture.pdf"
+    source.write_bytes(b"%PDF-1.7\nfixture")
+    result = produce(ProducerRequest(source, tmp_path / "schema-run"))
+    schema = json.loads((Path(__file__).resolve().parents[1] / "schemas/docs-producer-receipt-2.json").read_text(encoding="utf-8"))
+    receipt = json.loads(Path(result["receipt_path"]).read_text(encoding="utf-8"))
+    jsonschema.validate(receipt, schema)
+    assert receipt["status"] == "not_verified"
+    assert receipt["renderer"]["status"] == "not_verified"
+    assert receipt["provider"]["called"] is False
 
 
 @pytest.mark.parametrize("suffix,contents", [(".docx", b"PK\x03\x04fixture"), (".pdf", b"%PDF-1.7\nfixture")])
