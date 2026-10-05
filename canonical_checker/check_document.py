@@ -50,12 +50,24 @@ def check_path(path: Path, *, apply: bool = False) -> dict[str, object]:
     return report
 
 
+def _paths_alias(source: Path, output: Path) -> bool:
+    """Return whether report output would overwrite the input document."""
+    if source.resolve() == output.resolve():
+        return True
+    try:
+        return output.exists() and os.path.samefile(source, output)
+    except OSError:
+        return False
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check local-filter candidates without network or LLM calls.")
     parser.add_argument("path", type=Path)
     parser.add_argument("--apply", action="store_true", help="Atomically rewrite only the supplied path.")
     parser.add_argument("--output", type=Path, help="Write JSON report to this path instead of stdout.")
     args = parser.parse_args()
+    if args.output is not None and _paths_alias(args.path, args.output):
+        parser.error("--output must not refer to the input document (including aliases)")
     report = check_path(args.path, apply=args.apply)
     payload = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
     if args.output:
