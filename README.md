@@ -89,3 +89,23 @@ If the producer identity is known, also pass `--producer-task-id <actual-produce
 Supply absolute paths to the DOCX, distinct received copy, authoritative source/readback, actual DOCX readback JSON, actual render readback JSON/PDF/page images, and genuine final-output receipt; choose new paths for manifest, receiver receipt, and contract. Provide producer task/run identity only when it is actually known; if unavailable, omit both flags rather than inventing provenance. Always provide the actual receiving task/run identity. The helper prepares records only; it does not submit Kanban completion, run quality measurements, or call a provider.
 
 In the ordinary completion metadata, keep `verification.final_output_filter.receipts` and set `verification.artifact_quality.contract` to the generated contract; no synthetic artifact-quality receipt is used. The registered completion hook validates this explicit baseline contract and its hashes/readbacks. Other artifact kinds, PDFs, and full artifact-quality contracts remain on the existing strict receipt route. This local handoff format is not a claim of universal Hermes/Kanban enforcement: install the plugin hook in the intended host and exercise the real completion path there.
+
+## Ordinary HTML completion baseline
+
+For a single local `.html`/`.htm` delivery, `ordinary-html-baseline-1` is a narrow completion handoff after a real browser run. It binds the exact HTML hash and local `file://` URL to a browser receipt, representative browser render, applicable interaction checks, canonical final-output receipt, accepted finalization manifest, and receiver-copy readback. `page_load` is required; interaction, pause/resume, grounding, finish, WebGL, reduced-motion, visibility-handler, and external-resource checks are required only when declared applicable. Any reported page/console error or external resource blocks this baseline. DOCX keeps its separate ordinary-DOCX route; PDF and other targets retain the existing strict artifact-quality route. This is not a blanket HTML exemption or a claim that synthetic fixtures are real browser evidence.
+
+The preparer only binds existing absolute-path evidence and validates it; it does not open a browser, render the page, create final-output evidence, or assert a check. Run it from an installed host plugin after those readbacks already exist:
+
+```bash
+python3 /path/to/installed-plugin/scripts/prepare_ordinary_html_baseline.py \
+  --artifact /absolute/final.html --artifact-path /absolute/final.html \
+  --browser-receipt /absolute/browser-receipt.json --render /absolute/browser-render.png \
+  --final-output-receipt /absolute/final-output-receipt.json \
+  --manifest /absolute/finalization-manifest.json --receiver-receipt /absolute/receiver-receipt.json \
+  --applicability /absolute/applicability.json \
+  --contract /absolute/ordinary-html-contract.json
+```
+
+The browser receipt must identify its actual task/run, the exact artifact SHA-256 and local URL, successful declared checks, no page/console errors, and the actual render handle. Use only observed identity and applicable checks. The normal registered completion hook still requires the canonical final-output receipt; the contract does not replace or fabricate it.
+
+The focused `tests/test_ordinary_html_baseline.py` exercises isolated synthetic receipts for deterministic validator pass/negative behavior only; those fixtures are not browser runs and do not prove the host browser executed the HTML.

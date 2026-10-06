@@ -941,17 +941,24 @@ def _pre_tool_call(*, tool_name: str = "", args: Any = None, task_id: str | None
         contract = json.loads(contract_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError):
         return {"action": "block", "message": "docs artifact-quality guard: contract is unreadable"}
-    if isinstance(contract, dict) and contract.get("schema_version") == "ordinary-docx-baseline-1":
+    if isinstance(contract, dict) and contract.get("schema_version") in {"ordinary-docx-baseline-1", "ordinary-html-baseline-1"}:
+        is_html = contract.get("schema_version") == "ordinary-html-baseline-1"
         try:
             import sys
             if str(ARTIFACT_QUALITY_ROOT) not in sys.path:
                 sys.path.insert(0, str(ARTIFACT_QUALITY_ROOT))
-            from quality_rules import ordinary_docx_baseline
-            baseline_error = ordinary_docx_baseline.validate(contract_path, artifacts)
+            if is_html:
+                from quality_rules import ordinary_html_baseline
+                baseline_error = ordinary_html_baseline.validate(contract_path, artifacts)
+            else:
+                from quality_rules import ordinary_docx_baseline
+                baseline_error = ordinary_docx_baseline.validate(contract_path, artifacts)
         except Exception as exc:
-            baseline_error = f"ordinary-DOCX baseline validator is unavailable: {type(exc).__name__}"
+            route = "ordinary-HTML" if is_html else "ordinary-DOCX"
+            baseline_error = f"{route} baseline validator is unavailable: {type(exc).__name__}"
         if baseline_error:
-            return {"action": "block", "message": f"docs ordinary-DOCX baseline route: {baseline_error}"}
+            route = "ordinary-HTML" if is_html else "ordinary-DOCX"
+            return {"action": "block", "message": f"docs {route} baseline route: {baseline_error}"}
         return None
     target_required = isinstance(contract, dict) and isinstance(contract.get("artifact_quality"), dict) and contract["artifact_quality"].get("required") is True and bool(contract.get("artifact_kind")) and bool(contract.get("artifacts"))
     if not target_required:
