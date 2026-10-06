@@ -104,6 +104,38 @@ def make_fixture(tmp_path: Path) -> tuple[Path, Path, dict]:
     return artifact, final_receipt, value
 
 
+def test_helper_does_not_require_unknown_producer_identity(tmp_path):
+    artifact, final_receipt, _ = make_fixture(tmp_path)
+    # The helper preserves unknown provenance by omitting producer identity.
+    output = tmp_path / "unknown-producer-identity"
+    output.mkdir()
+    manifest = output / "finalization-manifest.json"
+    receiver_receipt = output / "receiver-receipt.json"
+    contract = output / "ordinary-docx-contract.json"
+    source = tmp_path / "source.txt"
+    readback = tmp_path / "docx-readback.json"
+    render_readback = tmp_path / "render-readback.json"
+    pdf = tmp_path / "rendered.pdf"
+    png = tmp_path / "representative-page.png"
+    received = tmp_path / "received-copy.docx"
+    command = [
+        sys.executable, str(ROOT / "scripts/prepare_ordinary_docx_baseline.py"),
+        "--artifact", str(artifact), "--receiver-copy", str(received),
+        "--source", str(source), "--docx-readback", str(readback),
+        "--render-readback", str(render_readback), "--rendered-pdf", str(pdf),
+        "--representative-page", str(png), "--final-output-receipt", str(final_receipt),
+        "--manifest", str(manifest), "--receiver-receipt", str(receiver_receipt),
+        "--contract", str(contract), "--receiver-task-id", "t_fixture_receiver",
+        "--receiver-run-id", "8",
+    ]
+    result = subprocess.run(command, check=False, capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert ordinary_docx_baseline.validate(contract, [str(artifact)]) is None
+    generated = json.loads(manifest.read_text(encoding="utf-8"))
+    assert "created_by_task_id" not in generated
+    assert "created_by_run_id" not in generated
+
+
 def test_synthetic_docx_preparation_and_real_hook_route(tmp_path):
     artifact, final_receipt, contract = make_fixture(tmp_path)
     spec = importlib.util.spec_from_file_location("ordinary_docx_fixture_guard", ROOT / "__init__.py")

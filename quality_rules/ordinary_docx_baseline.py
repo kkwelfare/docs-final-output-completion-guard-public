@@ -190,9 +190,25 @@ def validate(contract_path: Path, artifacts: list[str]) -> str | None:
     manifest_path = Path(manifest_value) if isinstance(manifest_value, str) else Path()
     receiver_path = Path(receiver_value) if isinstance(receiver_value, str) else Path()
     from quality_rules import finalization
-    manifest, manifest_error = finalization.validate_manifest(manifest_path, expected, require_identity=True)
+    try:
+        manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return "finalization manifest is unreadable or malformed"
+    if not isinstance(manifest_data, dict):
+        return "finalization manifest is unreadable or malformed"
+    has_task_id = isinstance(manifest_data.get("created_by_task_id"), str) and bool(manifest_data["created_by_task_id"])
+    has_run_id = isinstance(manifest_data.get("created_by_run_id"), int) and not isinstance(manifest_data.get("created_by_run_id"), bool)
+    if has_task_id != has_run_id:
+        return "finalization producer identity is incomplete"
+    has_identity = has_task_id and has_run_id
+    manifest, manifest_error = finalization.validate_manifest(manifest_path, expected, require_identity=has_identity)
     if manifest_error or manifest is None:
         return manifest_error or "finalization manifest is invalid"
+    if not has_identity:
+        for key, label in (("source", "finalization source"), ("checker", "finalization checker")):
+            error = finalization.validate_handle(manifest.get(key), label, include_size=True)
+            if error:
+                return error
     if manifest.get("state") != "accepted":
         return "finalization manifest is not accepted"
     return finalization.validate_receiver_copy(manifest, receiver_path, require_identity=True)
