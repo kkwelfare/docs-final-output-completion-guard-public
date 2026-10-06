@@ -65,3 +65,27 @@ The producer writes only a body-free `producer-receipt.json` and fake-render met
 To recover the quality-portable portion, unpack this archive into a new target, provide the external Python/Hermes/renderer/font setup, and supply a host adapter manifest. Verify checker/core hashes and rerun the portable suite before using it. This does not restore a full Hermes profile, plugin installation, gateway, task history, runtime ledgers, receipts from another environment, credentials, fonts, or external services. Full environment recovery requires a separately authorized host snapshot and should not be inferred from this archive.
 
 `PUBLICATION_MANIFEST.json` records the candidate boundary and exclusions. External inventory and verification receipts record the final archive hash and readback; those receipts are deliberately outside the archive to avoid self-reference.
+
+## Ordinary DOCX completion baseline
+
+For routine non-PDF DOCX delivery, after the canonical final-output checker and the real source/order/text/package and rendered-page readbacks have passed, `ordinary-docx-baseline-1` provides a narrow completion handoff. It is not a universal document-quality pass and does not replace owner review of the actual content/readbacks. It binds the DOCX and its body-free readback handles, genuine final-output receipt, rendered PDF/page evidence, accepted finalization manifest, and a distinct receiver-copy readback. Existing non-text evidence must not be turned into a fabricated semantic or Jev result; optional Jev/PDF advisory status remains exactly as observed, and this route makes no provider call.
+
+From an installed host plugin, use its `scripts/prepare_ordinary_docx_baseline.py` only after the destination mechanism has durably stored and read back the receiver copy:
+
+```bash
+python3 /path/to/installed-plugin/scripts/prepare_ordinary_docx_baseline.py \\
+  --artifact /absolute/final.docx --receiver-copy /absolute/readback-copy.docx \\
+  --source /absolute/authoritative-source.txt --docx-readback /absolute/docx-readback.json \\
+  --render-readback /absolute/render-readback.json --rendered-pdf /absolute/rendered.pdf \\
+  --representative-page /absolute/preview-first.png --representative-page /absolute/preview-last.png \\
+  --final-output-receipt /absolute/final-output-receipt.json \\
+  --manifest /absolute/finalization-manifest.json --receiver-receipt /absolute/receiver-receipt.json \\
+  --contract /absolute/ordinary-docx-baseline-contract.json \\
+  --receiver-task-id <actual-receiver-task-id> --receiver-run-id <actual-receiver-run-id>
+```
+
+If the producer identity is known, also pass `--producer-task-id <actual-producer-task-id> --producer-run-id <actual-producer-run-id>`; otherwise omit both flags.
+
+Supply absolute paths to the DOCX, distinct received copy, authoritative source/readback, actual DOCX readback JSON, actual render readback JSON/PDF/page images, and genuine final-output receipt; choose new paths for manifest, receiver receipt, and contract. Provide producer task/run identity only when it is actually known; if unavailable, omit both flags rather than inventing provenance. Always provide the actual receiving task/run identity. The helper prepares records only; it does not submit Kanban completion, run quality measurements, or call a provider.
+
+In the ordinary completion metadata, keep `verification.final_output_filter.receipts` and set `verification.artifact_quality.contract` to the generated contract; no synthetic artifact-quality receipt is used. The registered completion hook validates this explicit baseline contract and its hashes/readbacks. Other artifact kinds, PDFs, and full artifact-quality contracts remain on the existing strict receipt route. This local handoff format is not a claim of universal Hermes/Kanban enforcement: install the plugin hook in the intended host and exercise the real completion path there.

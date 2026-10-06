@@ -936,23 +936,30 @@ def _pre_tool_call(*, tool_name: str = "", args: Any = None, task_id: str | None
             return {"action": "block", "message": "docs artifact-quality guard: target completion requires artifact_quality contract and receipts"}
         return None
     contract_value = quality.get("contract")
-    receipt_values = quality.get("receipts")
-    if not isinstance(contract_value, str) or not contract_value or not isinstance(receipt_values, list) or not receipt_values:
-        return {"action": "block", "message": "docs artifact-quality guard: target completion requires contract and receipts"}
-    contract_path = Path(contract_value)
+    contract_path = Path(contract_value) if isinstance(contract_value, str) else Path()
     try:
         contract = json.loads(contract_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError):
         return {"action": "block", "message": "docs artifact-quality guard: contract is unreadable"}
+    if isinstance(contract, dict) and contract.get("schema_version") == "ordinary-docx-baseline-1":
+        try:
+            import sys
+            if str(ARTIFACT_QUALITY_ROOT) not in sys.path:
+                sys.path.insert(0, str(ARTIFACT_QUALITY_ROOT))
+            from quality_rules import ordinary_docx_baseline
+            baseline_error = ordinary_docx_baseline.validate(contract_path, artifacts)
+        except Exception as exc:
+            baseline_error = f"ordinary-DOCX baseline validator is unavailable: {type(exc).__name__}"
+        if baseline_error:
+            return {"action": "block", "message": f"docs ordinary-DOCX baseline route: {baseline_error}"}
+        return None
     target_required = isinstance(contract, dict) and isinstance(contract.get("artifact_quality"), dict) and contract["artifact_quality"].get("required") is True and bool(contract.get("artifact_kind")) and bool(contract.get("artifacts"))
     if not target_required:
         return {"action": "block", "message": "docs artifact-quality guard: contract does not declare a required target"}
-    finalization_spec = contract.get("finalization_manifest")
-    if not isinstance(finalization_spec, dict):
-        return {"action": "block", "message": "docs artifact-quality guard: required target must declare finalization_manifest with manifest and receiver receipt"}
-    if (not isinstance(finalization_spec.get("path"), str) or not finalization_spec.get("path")
-            or not isinstance(finalization_spec.get("receiver_receipt"), str) or not finalization_spec.get("receiver_receipt")):
-        return {"action": "block", "message": "docs artifact-quality guard: strict finalization_manifest requires path and receiver_receipt"}
+    declared = {str(Path(value).resolve()) for value in contract.get("artifacts", []) if isinstance(value, str)}
+    delivered = {str(Path(value).resolve()) for value in artifacts if isinstance(value, str)}
+    if declared != delivered:
+        return {"action": "block", "message": "docs artifact-quality guard: contract artifacts must exactly match delivered artifacts"}
     try:
         import sys
         if str(ARTIFACT_QUALITY_ROOT) not in sys.path:
@@ -964,12 +971,15 @@ def _pre_tool_call(*, tool_name: str = "", args: Any = None, task_id: str | None
         quality_targets = {str(path.resolve()) for path in common.target_artifacts(contract)}
     except Exception:
         return {"action": "block", "message": "docs artifact-quality guard: target ruleset is unavailable"}
-    declared = {str(Path(value).resolve()) for value in contract.get("artifacts", []) if isinstance(value, str)}
-    delivered = {str(Path(value).resolve()) for value in artifacts if isinstance(value, str)}
-    if declared != delivered:
-        return {"action": "block", "message": "docs artifact-quality guard: contract artifacts must exactly match delivered artifacts"}
-    if not quality_targets:
-        return None
+    finalization_spec = contract.get("finalization_manifest")
+    if not isinstance(finalization_spec, dict):
+        return {"action": "block", "message": "docs artifact-quality guard: required target must declare finalization_manifest with manifest and receiver receipt"}
+    if (not isinstance(finalization_spec.get("path"), str) or not finalization_spec.get("path")
+            or not isinstance(finalization_spec.get("receiver_receipt"), str) or not finalization_spec.get("receiver_receipt")):
+        return {"action": "block", "message": "docs artifact-quality guard: strict finalization_manifest requires path and receiver_receipt"}
+    receipt_values = quality.get("receipts")
+    if not isinstance(receipt_values, list) or not receipt_values:
+        return {"action": "block", "message": "docs artifact-quality guard: target completion requires contract and receipts"}
     quality_covered: set[str] = set()
     for value in receipt_values:
         if not isinstance(value, str):
