@@ -941,23 +941,46 @@ def _pre_tool_call(*, tool_name: str = "", args: Any = None, task_id: str | None
         contract = json.loads(contract_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError):
         return {"action": "block", "message": "docs artifact-quality guard: contract is unreadable"}
-    if isinstance(contract, dict) and contract.get("schema_version") in {"ordinary-docx-baseline-1", "ordinary-html-baseline-1"}:
-        is_html = contract.get("schema_version") == "ordinary-html-baseline-1"
+    if isinstance(contract, dict) and contract.get("schema_version") in {"ordinary-docx-baseline-1", "ordinary-html-baseline-1", "ordinary-html-fragment-baseline-1"}:
+        schema = contract.get("schema_version")
+        is_html = schema == "ordinary-html-baseline-1"
+        is_fragment = schema == "ordinary-html-fragment-baseline-1"
+        artifact_kind = quality.get("artifact_kind")
+        if is_fragment and artifact_kind != "cms-prose-fragment":
+            return {"action": "block", "message": "docs fragment baseline route: artifact_kind must explicitly be cms-prose-fragment"}
+        if is_fragment and artifacts:
+            return {"action": "block", "message": "docs fragment baseline route does not deliver a standalone HTML artifact"}
+        if not is_fragment and artifact_kind == "cms-prose-fragment":
+            return {"action": "block", "message": "docs fragment artifact_kind requires ordinary-html-fragment-baseline-1"}
         try:
             import sys
             if str(ARTIFACT_QUALITY_ROOT) not in sys.path:
                 sys.path.insert(0, str(ARTIFACT_QUALITY_ROOT))
-            if is_html:
+            if is_fragment:
+                from quality_rules import ordinary_html_fragment_baseline
+                import subprocess
+                observed = subprocess.run(
+                    ["hermes", "kanban", "show", task, "--json"],
+                    capture_output=True, text=True, check=True, timeout=30,
+                ).stdout
+                state = json.loads(observed[observed.index("{"):])
+                runs = state.get("runs", [])
+                trusted_run_id = max((row["id"] for row in runs), default=None)
+                baseline_error = ordinary_html_fragment_baseline.validate(
+                    contract_path, artifacts, trusted_task_id=task,
+                    trusted_run_id=trusted_run_id,
+                )
+            elif is_html:
                 from quality_rules import ordinary_html_baseline
                 baseline_error = ordinary_html_baseline.validate(contract_path, artifacts)
             else:
                 from quality_rules import ordinary_docx_baseline
                 baseline_error = ordinary_docx_baseline.validate(contract_path, artifacts)
         except Exception as exc:
-            route = "ordinary-HTML" if is_html else "ordinary-DOCX"
+            route = "ordinary-HTML fragment" if is_fragment else ("ordinary-HTML" if is_html else "ordinary-DOCX")
             baseline_error = f"{route} baseline validator is unavailable: {type(exc).__name__}"
         if baseline_error:
-            route = "ordinary-HTML" if is_html else "ordinary-DOCX"
+            route = "ordinary-HTML fragment" if is_fragment else ("ordinary-HTML" if is_html else "ordinary-DOCX")
             return {"action": "block", "message": f"docs {route} baseline route: {baseline_error}"}
         return None
     target_required = isinstance(contract, dict) and isinstance(contract.get("artifact_quality"), dict) and contract["artifact_quality"].get("required") is True and bool(contract.get("artifact_kind")) and bool(contract.get("artifacts"))
