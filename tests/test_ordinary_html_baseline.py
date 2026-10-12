@@ -116,11 +116,38 @@ def test_html_baseline_rejects_non_html_or_multiple_artifacts(tmp_path):
     assert ordinary_html_baseline.validate(contract,[str(artifact.with_suffix('.docx'))]) == "ordinary-HTML baseline artifact coverage mismatch"
 
 
-def test_docx_baseline_route_remains_registered():
-    source = (ROOT / "__init__.py").read_text(encoding="utf-8")
-    assert 'contract.get("schema_version") in {"ordinary-docx-baseline-1", "ordinary-html-baseline-1"}' in source
-    assert 'from quality_rules import ordinary_docx_baseline' in source
-    assert 'baseline_error = ordinary_docx_baseline.validate(contract_path, artifacts)' in source
+def test_docx_baseline_route_remains_registered(tmp_path, monkeypatch):
+    import importlib.util
+    import sys
+    import types
+    spec = importlib.util.spec_from_file_location("ordinary_docx_route_guard_fixture", ROOT / "__init__.py")
+    assert spec and spec.loader
+    guard = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = guard
+    spec.loader.exec_module(guard)
+    validator = types.ModuleType("ordinary_docx_baseline")
+    calls = []
+    validator.validate = lambda contract_path, artifacts: calls.append((contract_path, artifacts)) or ("DOCX baseline checks are missing" if json.loads(contract_path.read_text()).get("invalid") else None)
+    rules = types.ModuleType("quality_rules")
+    rules.__path__ = []
+    rules.ordinary_docx_baseline = validator
+    monkeypatch.setitem(sys.modules, "quality_rules", rules)
+    artifact = tmp_path / "output.docx"
+    artifact.write_bytes(b"synthetic-docx")
+    contract = tmp_path / "contract.json"
+    contract.write_text(json.dumps({"schema_version": "ordinary-docx-baseline-1"}), encoding="utf-8")
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_test")
+    args = {"artifacts": [str(artifact)], "metadata": {"verification": {
+        "final_output_filter": {"receipts": ["/synthetic/final-receipt.json"]},
+        "artifact_quality": {"contract": str(contract)}}}}
+    monkeypatch.setattr(guard, "_validate_receipt_generation", lambda args, receipts: None)
+    monkeypatch.setattr(guard, "_validate_receipt", lambda receipt: ({str(artifact.resolve())}, None))
+    assert guard._pre_tool_call(tool_name="kanban_complete", args=args) is None
+    assert len(calls) == 1
+    contract.write_text(json.dumps({"schema_version": "ordinary-docx-baseline-1", "invalid": True}), encoding="utf-8")
+    result = guard._pre_tool_call(tool_name="kanban_complete", args=args)
+    assert result and result["action"] == "block"
+    assert "DOCX baseline checks are missing" in result["message"]
 
 
 def test_html_baseline_normal_hook_accepts_synthetic_route_and_blocks_missing_browser(tmp_path):

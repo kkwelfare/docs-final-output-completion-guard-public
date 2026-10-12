@@ -41,10 +41,10 @@ def test_completion_guard_blocks_pdf_contract_without_layout_config(tmp_path, mo
     }), encoding="utf-8")
     monkeypatch.setattr(guard, "_validate_receipt", lambda _: ({str(pdf.resolve())}, None))
     result = guard._pre_tool_call(tool_name="kanban_complete", args=_args(pdf, contract, ["/synthetic/quality.json"]))
-    assert result == {
-        "action": "block",
-        "message": "docs artifact-quality guard: required target must declare finalization_manifest with manifest and receiver receipt",
-    }
+    assert result and result["action"] == "block"
+    assert "AQ-LAYOUT-01" in result["message"]
+    assert "layout_typography" in result["message"]
+    assert "requires" in result["message"]
 
 
 def test_completion_guard_hook_blocks_required_contract_without_finalization_manifest(tmp_path, monkeypatch):
@@ -62,13 +62,13 @@ def test_completion_guard_hook_blocks_required_contract_without_finalization_man
     }), encoding="utf-8")
     monkeypatch.setattr(guard, "_validate_receipt", lambda _: ({str(pdf.resolve())}, None))
     result = guard._pre_tool_call(tool_name="kanban_complete", args=_args(pdf, contract, ["/synthetic/quality.json"]))
-    assert result == {
-        "action": "block",
-        "message": "docs artifact-quality guard: strict finalization_manifest requires path and receiver_receipt",
-    }
+    assert result and result["action"] == "block"
+    assert "AQ-LAYOUT-01" in result["message"]
+    assert "measurement_basis" in result["message"]
+    assert "pdf_points" in result["message"]
 
 
-def test_completion_guard_blocks_missing_artifact_quality_receipt(tmp_path, monkeypatch):
+def test_completion_guard_blocks_invalid_pdf_layout_before_missing_artifact_quality_receipt(tmp_path, monkeypatch):
     guard = _load_guard()
     monkeypatch.setenv("HERMES_KANBAN_TASK", "t_test")
     pdf = tmp_path / "output.pdf"
@@ -82,7 +82,10 @@ def test_completion_guard_blocks_missing_artifact_quality_receipt(tmp_path, monk
     }), encoding="utf-8")
     monkeypatch.setattr(guard, "_validate_receipt", lambda _: ({str(pdf.resolve())}, None))
     result = guard._pre_tool_call(tool_name="kanban_complete", args=_args(pdf, contract, []))
-    assert result and result["action"] == "block" and "contract and receipts" in result["message"]
+    assert result and result["action"] == "block"
+    assert "AQ-LAYOUT-01" in result["message"]
+    assert "measurement_basis" in result["message"]
+    assert "pdf_points" in result["message"]
 
 
 def test_artifact_quality_receipt_allowlist_accepts_checker_status_fields_only():
