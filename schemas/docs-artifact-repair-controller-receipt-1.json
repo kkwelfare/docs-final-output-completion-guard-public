@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://chanmi.local/schemas/docs-artifact-repair-controller-receipt-1.json",
+  "$id": "https://github.com/kkwelfare/docs-final-output-completion-guard-public/schemas/docs-artifact-repair-controller-receipt-1.json",
   "title": "Bounded artifact repair controller receipt",
   "type": "object",
   "additionalProperties": false,

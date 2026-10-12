@@ -1,5 +1,23 @@
 # docs-final-output-completion-guard quality-portable candidate v3
 
+## Public quick start
+
+**What it is:** A Hermes Agent plugin for deterministic document checks and bounded, optional final-output review.
+**Who it is for:** Hermes users who produce or review documents and want local quality checks plus an explicitly configured host integration.
+**Requirements:** Hermes Agent; no `requires_hermes` compatibility range is declared. The manifest declares `PyMuPDF>=1.28.2,<2`; renderers and other verification packages are separate host dependencies described below. The optional host review route requires explicit opt-in and sends bounded text-only metrics/request context, not document body text or page images. Provider credentials are resolved by Hermes and the optional routes (`TYPESAFE_API_KEY` and `OPENROUTER_API_KEY`); offline checks do not call them.
+
+**Install and enable** (the installed plugin name comes from `plugin.yaml`):
+
+```sh
+hermes plugins install kkwelfare/docs-final-output-completion-guard-public --no-enable
+hermes plugins enable docs-final-output-completion-guard
+```
+
+**Minimal local check:** from the repository root, run `python3 check_docs_artifact.py --help` to see the checker inputs; for the optional portable producer, use the fixture-based command below with your own source and new output directory. The normal offline checks do not call a provider.
+
+License: [MIT](LICENSE).
+
+
 Release state: publicly published source repository at https://github.com/kkwelfare/docs-final-output-completion-guard-public on `main`. Repository publication was performed as a separate step; gateway changes, live profile changes, credential changes, and provider calls were not performed by this candidate build.
 
 This archive is a quality-portable backup, not a full environment recovery image. It contains deterministic local quality logic, the canonical final-output checker source, portable contract tests, public producer seams, schemas, and versioned presets. It does not contain a Hermes profile, gateway state, task state, runtime ledgers, credentials, host configuration, a renderer installation, or generated user documents.
