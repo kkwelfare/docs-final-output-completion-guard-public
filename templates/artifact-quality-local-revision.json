@@ -1,0 +1,58 @@
+{
+  "schema_version": "docs-artifact-quality-contract-1",
+  "artifact_kind": "<fill: artifact kind>",
+  "artifact_quality": {
+    "required": true,
+    "layout_typography": {
+      "required": true
+    }
+  },
+  "artifacts": [
+    "<fill: absolute final artifact path after production>"
+  ],
+  "authoritative_source": {
+    "path": "<fill: absolute authoritative source path>",
+    "sha256": "<fill: measured source SHA-256 after production>",
+    "readback_mode": "<fill: actual source readback method>"
+  },
+  "visible_criteria": [
+    {"id": "<fill: criterion-1>"},
+    {"id": "<fill: criterion-2>"},
+    {"id": "<fill: criterion-3>"},
+    {"id": "<fill: criterion-4>"},
+    {"id": "<fill: criterion-5>"}
+  ],
+  "rule_contracts": {
+    "AQ-CHANGE-01": {
+      "approved_scope_ids": ["<fill: scope ID>"],
+      "preserved_field_ids": ["<fill: preserved field ID>"]
+    },
+    "AQ-IDENTITY-01": {"identities": []},
+    "AQ-ASSET-01": {"assets": []},
+    "AQ-AUTHORITY-01": {"owner_id": "<fill: authoritative owner ID>"},
+    "AQ-BOUNDARY-01": {"clipped": false, "overflow": false},
+    "AQ-RELATION-01": {"relations": []},
+    "AQ-SCOPE-01": {
+      "protected_region_ids": ["<fill: protected region ID>"],
+      "baseline_sha256": "<fill: measured baseline SHA-256>"
+    },
+    "AQ-VISIBLE-01": {
+      "criterion_ids": [
+        "<fill: criterion-1>",
+        "<fill: criterion-2>",
+        "<fill: criterion-3>",
+        "<fill: criterion-4>",
+        "<fill: criterion-5>"
+      ],
+      "image_evidence_sha256": "<fill: measured visible-check evidence SHA-256>"
+    },
+    "AQ-FIXTURE-01": {
+      "suite": {
+        "path": "<fill: absolute fixture suite path>",
+        "sha256": "<fill: measured fixture suite SHA-256>"
+      },
+      "expected_rule_failures": ["<fill: expected failure ID(s), or explicit none>"]
+    },
+    "AQ-LOCAL-GLOBAL-01": {"required": false}
+  }
+}
