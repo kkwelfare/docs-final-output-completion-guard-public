@@ -9,6 +9,7 @@ import hashlib
 import html
 import json
 import math
+import re
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +43,111 @@ def _padding(value: Any, margins_pt: tuple[float, float]) -> tuple[float, float,
             and all(_finite_nonnegative(item) for item in value)):
         return tuple(float(item) for item in value)  # type: ignore[return-value]
     raise ValueError("HTML-PDF-ALIGNMENT-CONTRACT-01")
+
+
+# Adjacent parallel bordered frames: same-width (or same-height) frames whose facing edges are
+# separated by more than 0pt but less than this gap read as two lines side by side at the boundary.
+# 8pt is the owner-approved threshold.
+ADJACENT_PARALLEL_FRAME_MIN_GAP_PT = 8.0
+ADJACENT_PARALLEL_FRAME_REASON = "HTML-PDF-ADJACENT-PARALLEL-FRAMES-01"
+_PARALLEL_SIZE_TOLERANCE_PT = 1.0   # widths (or heights) are "almost the same"
+_PARALLEL_EDGE_TOLERANCE_PT = 1.0   # left/right (or top/bottom) edges are "aligned"
+_PARALLEL_GAP_EPSILON_PT = 0.01     # rendering noise: touching (<=eps) and exactly-minimum (>=min-eps) both pass
+
+TABLE_CONTRACT_REASON = "HTML-PDF-TABLE-CONTRACT-01"
+
+_SURFACE_STYLE_KEYS = frozenset({"border_color", "border_width_pt", "background_color"})
+_SURFACE_COLOR_PATTERN = re.compile(r"#[0-9a-fA-F]{6}")
+
+
+def _surface_style(raw: Any) -> dict[str, Any]:
+    """Validate one explicit surface paint declaration and return its normalized form.
+
+    Accepted keys (all optional, at least one required): ``border_color`` and
+    ``background_color`` as ``#rrggbb`` and ``border_width_pt`` as a positive finite
+    number of points.  Colors are normalized to lowercase and the width to four
+    decimals so the recorded plan value is a fixed point of this function.
+    """
+    if not isinstance(raw, dict) or not raw or any(key not in _SURFACE_STYLE_KEYS for key in raw):
+        raise ValueError("HTML-PDF-RELATION-CONTRACT-01")
+    normalized: dict[str, Any] = {}
+    for key in ("border_color", "background_color"):
+        if key in raw:
+            value = raw[key]
+            if not isinstance(value, str) or _SURFACE_COLOR_PATTERN.fullmatch(value) is None:
+                raise ValueError("HTML-PDF-RELATION-CONTRACT-01")
+            normalized[key] = value.lower()
+    if "border_width_pt" in raw:
+        if not _finite_positive(raw["border_width_pt"]):
+            raise ValueError("HTML-PDF-RELATION-CONTRACT-01")
+        width = round(float(raw["border_width_pt"]), 4)
+        if width <= 0:
+            raise ValueError("HTML-PDF-RELATION-CONTRACT-01")
+        normalized["border_width_pt"] = width
+    return normalized
+
+
+def _table_declaration(raw: Any, target_kind: str, relation: str) -> dict[str, Any]:
+    """Validate one optional table-row declaration ``{"group_id": str, "row_index": int >= 0}``.
+
+    Relations that share a ``group_id`` are drawn as ONE outer frame plus one divider line per row
+    boundary (table form) instead of one bordered frame per row.  A row is an ``inside`` surface/shape.
+    """
+    if (not isinstance(raw, dict) or set(raw) != {"group_id", "row_index"}
+            or not isinstance(raw["group_id"], str) or not raw["group_id"].strip()
+            or raw["group_id"] != raw["group_id"].strip()
+            or not isinstance(raw["row_index"], int) or isinstance(raw["row_index"], bool) or raw["row_index"] < 0
+            or target_kind not in {"surface", "shape"} or relation != "inside"):
+        raise ValueError(TABLE_CONTRACT_REASON)
+    return {"group_id_hash": hashlib.sha256(raw["group_id"].encode()).hexdigest()[:16], "row_index": raw["row_index"]}
+
+
+def _resolve_table_groups(frames: list[dict[str, Any]], *, record: bool) -> None:
+    """Validate every table group across all planned frames.
+
+    Rows of one group must be indexed 0..n-1 (n >= 2), share x/width, kind and surface_style, and tile
+    vertically without a gap.  With ``record`` the derived ``row_count`` / ``outer_bbox_pt`` are written to
+    each member relation; otherwise the recorded values must equal the recomputed ones (tamper check).
+    """
+    rows_by_group: dict[str, dict[str, dict[str, Any]]] = {}
+    members: dict[str, list[dict[str, Any]]] = {}
+    for frame in frames:
+        for relation in frame.get("relations") or []:
+            table = relation.get("table")
+            if table is None:
+                continue
+            if (not isinstance(table, dict) or not isinstance(table.get("group_id_hash"), str)
+                    or len(table["group_id_hash"]) != 16 or not isinstance(table.get("row_index"), int)
+                    or isinstance(table["row_index"], bool) or table["row_index"] < 0
+                    or relation.get("target_kind") not in {"surface", "shape"} or relation.get("relation") != "inside"):
+                raise ValueError(TABLE_CONTRACT_REASON)
+            rows = rows_by_group.setdefault(table["group_id_hash"], {})
+            first = rows.setdefault(relation["target_id_hash"], relation)
+            if first["table"]["row_index"] != table["row_index"]:
+                raise ValueError(TABLE_CONTRACT_REASON)
+            members.setdefault(table["group_id_hash"], []).append(relation)
+    for group_hash, rows in rows_by_group.items():
+        ordered = sorted(rows.values(), key=lambda item: item["table"]["row_index"])
+        if len(ordered) < 2 or [item["table"]["row_index"] for item in ordered] != list(range(len(ordered))):
+            raise ValueError(TABLE_CONTRACT_REASON)
+        for previous, current in zip(ordered, ordered[1:]):
+            pb, cb = [float(v) for v in previous["target_bbox_pt"]], [float(v) for v in current["target_bbox_pt"]]
+            if (abs(cb[0] - pb[0]) > .01 or abs(cb[2] - pb[2]) > .01 or abs(cb[1] - (pb[1] + pb[3])) > .01
+                    or previous.get("surface_style") != current.get("surface_style")
+                    or previous["target_kind"] != current["target_kind"]):
+                raise ValueError(TABLE_CONTRACT_REASON)
+        top, last = [float(v) for v in ordered[0]["target_bbox_pt"]], [float(v) for v in ordered[-1]["target_bbox_pt"]]
+        outer = [round(top[0], 4), round(top[1], 4), round(top[2], 4), round(last[1] + last[3] - top[1], 4)]
+        for relation in members[group_hash]:
+            table = relation["table"]
+            if record:
+                table["row_count"], table["outer_bbox_pt"] = len(ordered), outer
+                continue
+            recorded = table.get("outer_bbox_pt")
+            if (table.get("row_count") != len(ordered) or not isinstance(recorded, list) or len(recorded) != 4
+                    or any(not isinstance(value, (int, float)) or isinstance(value, bool) or abs(float(value) - expected) > .001
+                           for value, expected in zip(recorded, outer))):
+                raise ValueError(TABLE_CONTRACT_REASON)
 
 
 def _layout_declaration(*, role: str, single_line: bool, vertical_align: str | None,
@@ -88,13 +194,18 @@ def _layout_declaration(*, role: str, single_line: bool, vertical_align: str | N
                     or float(bbox[2]) <= 0 or float(bbox[3]) <= 0 or not _finite_nonnegative(minimum)):
                 raise ValueError("HTML-PDF-RELATION-CONTRACT-01")
             seen.add(target_id)
-            normalized_relations.append({
+            entry = {
                 "target_id_hash": hashlib.sha256(target_id.encode()).hexdigest()[:16],
                 "target_kind": target_kind,
                 "target_bbox_pt": [round(float(item), 4) for item in bbox],
                 "relation": relation,
                 "min_gap_pt": round(float(minimum), 4),
-            })
+            }
+            if raw.get("surface_style") is not None:
+                entry["surface_style"] = _surface_style(raw["surface_style"])
+            if raw.get("table") is not None:
+                entry["table"] = _table_declaration(raw["table"], target_kind, relation)
+            normalized_relations.append(entry)
     return alignment, normalized_relations
 
 
@@ -303,6 +414,22 @@ def _frame_markup(planned: dict[str, Any], index: int) -> tuple[str, str]:
     return css, markup
 
 
+def _surface_paint(relation: dict[str, Any]) -> tuple[str, str]:
+    """Return (background color, border declaration) for one relation target.
+
+    Without ``surface_style`` this is exactly the legacy fixed paint
+    (``#e6e9ed`` fill and, for shape/surface targets, ``0.5pt solid #c5cbd3``).
+    """
+    style = relation.get("surface_style") or {}
+    background = style.get("background_color", "#e6e9ed")
+    if "border_color" in style or "border_width_pt" in style:
+        width = "%spt" % style["border_width_pt"] if "border_width_pt" in style else "0.5pt"
+        return background, "border:%s solid %s;" % (width, style.get("border_color", "#c5cbd3"))
+    if relation["target_kind"] in {"shape", "surface"}:
+        return background, "border:0.5pt solid #c5cbd3;"
+    return background, ""
+
+
 def _surface_markup(frames: list[dict[str, Any]]) -> tuple[str, str]:
     declarations: dict[str, dict[str, Any]] = {}
     for frame in frames:
@@ -310,23 +437,54 @@ def _surface_markup(frames: list[dict[str, Any]]) -> tuple[str, str]:
             target_hash = relation["target_id_hash"]
             previous = declarations.get(target_hash)
             if (previous is not None and
-                    (previous["target_kind"], previous["target_bbox_pt"]) !=
-                    (relation["target_kind"], relation["target_bbox_pt"])):
+                    (previous["target_kind"], previous["target_bbox_pt"], previous.get("surface_style"), previous.get("table")) !=
+                    (relation["target_kind"], relation["target_bbox_pt"], relation.get("surface_style"), relation.get("table"))):
                 raise ValueError("HTML-PDF-RELATION-CONTRACT-01")
             declarations[target_hash] = relation
     css_parts, markup_parts = [], []
-    for index, relation in enumerate(declarations.values(), start=1):
+    for index, relation in enumerate([item for item in declarations.values() if item.get("table") is None], start=1):
         x, y, width, height = relation["target_bbox_pt"]
         target_kind = relation["target_kind"]
         selector = f"#safe-wrap-surface-{index}"
+        background, border = _surface_paint(relation)
         css_parts.append(selector + "{position:absolute;z-index:0;left:%spt;top:%spt;width:%spt;height:%spt;"
-                         "box-sizing:border-box;background:#e6e9ed;%s}" % (
-                             x, y, width, height,
-                             "border:0.5pt solid #c5cbd3;" if target_kind in {"shape", "surface"} else "",
+                         "box-sizing:border-box;background:%s;%s}" % (
+                             x, y, width, height, background, border,
                          ))
         element = "div" if target_kind != "image" else "div"
         markup_parts.append('<%s id="safe-wrap-surface-%s" data-target-id-hash="%s"></%s>' %
                             (element, index, relation["target_id_hash"], element))
+    table_css, table_markup = _table_markup(declarations)
+    return "".join(css_parts) + table_css, "".join(markup_parts) + table_markup
+
+
+def _table_markup(declarations: dict[str, dict[str, Any]]) -> tuple[str, str]:
+    """Draw each table group as one bordered outer frame plus one divider line per row boundary.
+
+    Paint (border color/width, background) comes from the same ``surface_style`` resolution as a plain
+    surface; the dividers reuse the border color and width.  No table relation -> no output.
+    """
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for relation in declarations.values():
+        if relation.get("table") is not None:
+            groups.setdefault(relation["table"]["group_id_hash"], []).append(relation)
+    css_parts, markup_parts = [], []
+    for number, (group_hash, rows) in enumerate(groups.items(), start=1):
+        rows.sort(key=lambda item: item["table"]["row_index"])
+        x, y, width, height = rows[0]["table"]["outer_bbox_pt"]
+        background, border = _surface_paint(rows[0])
+        style = rows[0].get("surface_style") or {}
+        line_width = float(style.get("border_width_pt", 0.5))
+        line_color = style.get("border_color", "#c5cbd3")
+        css_parts.append("#safe-wrap-table-%s{position:absolute;z-index:0;left:%spt;top:%spt;width:%spt;height:%spt;"
+                         "box-sizing:border-box;background:%s;%s}" % (number, x, y, width, height, background, border))
+        markup_parts.append('<div id="safe-wrap-table-%s" data-table-id-hash="%s"></div>' % (number, group_hash))
+        for divider, row in enumerate(rows[1:], start=1):
+            css_parts.append("#safe-wrap-table-%s-divider-%s{position:absolute;z-index:0;left:%spt;top:%spt;width:%spt;"
+                             "height:%spt;background:%s;}" % (
+                                 number, divider, x + line_width, round(row["target_bbox_pt"][1] - line_width / 2, 4),
+                                 round(width - 2 * line_width, 4), line_width, line_color))
+            markup_parts.append('<div id="safe-wrap-table-%s-divider-%s"></div>' % (number, divider))
     return "".join(css_parts), "".join(markup_parts)
 
 
@@ -536,10 +694,15 @@ def _validate_planned_layout(frames: list[dict[str, Any]]) -> None:
                         or not all(_finite_nonnegative(item) for item in relation["target_bbox_pt"])
                         or not _finite_nonnegative(relation.get("min_gap_pt"))):
                     raise ValueError("HTML-PDF-RELATION-CONTRACT-01")
-                identity = (relation["target_kind"], tuple(map(float, relation["target_bbox_pt"])))
+                style = relation.get("surface_style")
+                if style is not None and _surface_style(style) != style:
+                    raise ValueError("HTML-PDF-RELATION-CONTRACT-01")
+                identity = (relation["target_kind"], tuple(map(float, relation["target_bbox_pt"])),
+                            tuple(sorted(style.items())) if style is not None else None)
                 previous = targets.setdefault(relation["target_id_hash"], identity)
                 if previous != identity:
                     raise ValueError("HTML-PDF-RELATION-CONTRACT-01")
+    _resolve_table_groups(frames, record=False)
     if not declared:
         raise ValueError("HTML-PDF-LAYOUT-CONTRACT-01")
 
@@ -549,7 +712,19 @@ def write_controlled_html_frames(frames: list[dict[str, Any]], html_path: Path, 
                                  semantic_surface_contract_path: Path | None = None,
                                  semantic_surface_bindings: list[dict[str, Any]] | None = None,
                                  semantic_surface_plan_log_path: Path | None = None) -> dict[str, Any]:
-    """Write frame-aware explicit-line HTML and a legacy v2 or enforced v3 plan."""
+    """Write frame-aware explicit-line HTML and a legacy v2 or enforced v3 plan.
+
+    A relation may carry an optional ``surface_style`` (``border_color`` ``#rrggbb``,
+    ``border_width_pt`` > 0, ``background_color`` ``#rrggbb``) that overrides the fixed
+    legacy surface paint; the normalized value is recorded in the plan relation.
+
+    Table form: relations that carry ``table={"group_id": str, "row_index": int}`` and share a
+    ``group_id`` are drawn as one outer frame (``surface_style`` border + background) plus one divider
+    line between consecutive rows, instead of one bordered frame per row.  Rows must be ``inside``
+    surfaces/shapes indexed 0..n-1 (n >= 2) with equal x/width and no vertical gap between rows.  The
+    group's ``row_count`` and ``outer_bbox_pt`` are recorded in each relation's ``table`` entry.
+    Without ``table`` the HTML and receipt are unchanged.
+    """
     if not frames:
         raise ValueError("HTML-PDF-GEOMETRY-01")
     planned_frames = [plan_html_frame(**frame) for frame in frames]
@@ -558,6 +733,7 @@ def write_controlled_html_frames(frames: list[dict[str, Any]], html_path: Path, 
     spacing_declared = any(isinstance(frame.get("spacing"), dict) for frame in planned_frames)
     layout_declared = any(isinstance(frame.get("alignment"), dict) or frame.get("relations") for frame in planned_frames)
     if layout_declared:
+        _resolve_table_groups(planned_frames, record=True)
         _validate_planned_layout(planned_frames)
     if spacing_declared:
         if not all(isinstance(frame.get("spacing"), dict) for frame in planned_frames):
@@ -710,6 +886,33 @@ def _match_surface(page: pymupdf.Page, relation: dict[str, Any]) -> tuple[float,
     return selected if distance(selected) <= 4.0 else None
 
 
+def _match_table_row(page: pymupdf.Page, relation: dict[str, Any]) -> tuple[float, float, float, float] | None:
+    """Row cell of a table-form relation, read from the PDF: the outer frame plus the divider lines."""
+    table = relation["table"]
+    expected = _xyxy(table["outer_bbox_pt"])
+    candidates = _surface_candidates(page, relation["target_kind"])
+    distance = lambda box: sum(abs(left - right) for left, right in zip(box, expected))
+    outer_boxes = [box for box in candidates if distance(box) <= 4.0]
+    if not outer_boxes:
+        return None
+    outer = min(outer_boxes, key=distance)
+    _, row_y, _, row_height = map(float, relation["target_bbox_pt"])
+
+    def divider_center(center_y: float) -> float | None:
+        lines = [box for box in candidates if box[3] - box[1] <= 4.0 and box[2] - box[0] >= 0.9 * (outer[2] - outer[0])
+                 and abs((box[1] + box[3]) / 2 - center_y) <= 1.5]
+        return min(((box[1] + box[3]) / 2 for box in lines), key=lambda value: abs(value - center_y)) if lines else None
+
+    top, bottom = outer[1], outer[3]
+    if table["row_index"] > 0:
+        top = divider_center(row_y)
+    if table["row_index"] < table["row_count"] - 1:
+        bottom = divider_center(row_y + row_height)
+    if top is None or bottom is None:
+        return None
+    return outer[0], top, outer[2], bottom
+
+
 def _relation_measurement(glyph: tuple[float, float, float, float], target: tuple[float, float, float, float],
                           relation: str, min_gap_pt: float) -> tuple[float, float, bool]:
     overlap_x = max(0.0, min(glyph[2], target[2]) - max(glyph[0], target[0]))
@@ -722,6 +925,90 @@ def _relation_measurement(glyph: tuple[float, float, float, float], target: tupl
     dy = max(target[1] - glyph[3], glyph[1] - target[3], 0.0)
     gap = math.hypot(dx, dy) if overlap_area == 0 else -min(overlap_x, overlap_y)
     return gap, overlap_area, overlap_area <= .0001 and gap >= min_gap_pt - .01
+
+
+def _stroked_rect_frames(page: pymupdf.Page) -> list[dict[str, Any]]:
+    """Return the bordered frames drawn on one page: stroked single-rectangle drawings.
+
+    Fill-only rectangles (frames without a line), dividers, and non-rectangular paths are not frames.
+    The geometry is the stroke path rectangle, the same basis as ``Drawing.rect``.
+    """
+    frames: list[dict[str, Any]] = []
+    try:
+        drawings = page.get_drawings()
+    except (AttributeError, RuntimeError, ValueError):
+        return frames
+    for drawing in drawings:
+        rect, width, items = drawing.get("rect"), drawing.get("width"), drawing.get("items") or []
+        if ("s" not in str(drawing.get("type", "")) or drawing.get("color") is None or rect is None
+                or not isinstance(width, (int, float)) or isinstance(width, bool) or not width > 0
+                or len(items) != 1 or items[0][0] != "re"):
+            continue
+        box = (float(rect.x0), float(rect.y0), float(rect.x1), float(rect.y1))
+        if box[2] - box[0] > 0 and box[3] - box[1] > 0:
+            frames.append({"bbox": box, "stroke_width_pt": float(width)})
+    return frames
+
+
+def _parallel_frame_id(page_number: int, index: int, frame: dict[str, Any],
+                       frames: list[dict[str, Any]]) -> str:
+    """Prefer the receipt target hash of the matching declared surface; else a positional id."""
+    half = frame["stroke_width_pt"] / 2
+    outer = (frame["bbox"][0] - half, frame["bbox"][1] - half, frame["bbox"][2] + half, frame["bbox"][3] + half)
+    best: tuple[float, str] | None = None
+    for declared in frames:
+        for relation in declared.get("relations") or []:
+            try:
+                expected = _xyxy(relation["target_bbox_pt"])
+                target_hash = str(relation["target_id_hash"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            distance = sum(abs(left - right) for left, right in zip(outer, expected))
+            if distance <= 4.0 and (best is None or distance < best[0]):
+                best = (distance, target_hash)
+    return best[1] if best is not None else f"pdf-p{page_number}-frame-{index}"
+
+
+def find_adjacent_parallel_frames(boxes: list[tuple[str, tuple[float, float, float, float]]],
+                                  *, min_gap_pt: float = ADJACENT_PARALLEL_FRAME_MIN_GAP_PT) -> list[dict[str, Any]]:
+    """Pure geometry: bordered frames of the same width (height) with aligned edges that sit closer
+    than ``min_gap_pt`` but not touching (gap > 0) are a HARD_FAIL-equivalent defect.
+
+    ``boxes`` are ``(frame_id, (x0, y0, x1, y1))``.  Nested/overlapping frames have no positive gap and
+    are never reported.  A gap of exactly ``min_gap_pt`` passes.
+    """
+    findings: list[dict[str, Any]] = []
+    for position, (id_a, a) in enumerate(boxes):
+        for id_b, b in boxes[position + 1:]:
+            for orientation in ("vertical", "horizontal"):
+                if orientation == "vertical":   # stacked: equal widths, aligned left/right edges
+                    same_size = abs((a[2] - a[0]) - (b[2] - b[0])) <= _PARALLEL_SIZE_TOLERANCE_PT
+                    aligned = abs(a[0] - b[0]) <= _PARALLEL_EDGE_TOLERANCE_PT and abs(a[2] - b[2]) <= _PARALLEL_EDGE_TOLERANCE_PT
+                    gap = max(b[1] - a[3], a[1] - b[3])
+                else:                           # side by side: equal heights, aligned top/bottom edges
+                    same_size = abs((a[3] - a[1]) - (b[3] - b[1])) <= _PARALLEL_SIZE_TOLERANCE_PT
+                    aligned = abs(a[1] - b[1]) <= _PARALLEL_EDGE_TOLERANCE_PT and abs(a[3] - b[3]) <= _PARALLEL_EDGE_TOLERANCE_PT
+                    gap = max(b[0] - a[2], a[0] - b[2])
+                if same_size and aligned and _PARALLEL_GAP_EPSILON_PT < gap < min_gap_pt - _PARALLEL_GAP_EPSILON_PT:
+                    findings.append({"frame_id_a": id_a, "frame_id_b": id_b, "orientation": orientation,
+                                     "gap_pt": round(gap, 4),
+                                     "bbox_a_pdf_points": [round(v, 3) for v in a],
+                                     "bbox_b_pdf_points": [round(v, 3) for v in b]})
+    return findings
+
+
+def _scan_adjacent_parallel_frames(document: pymupdf.Document, frames: list[dict[str, Any]]) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    frame_count = 0
+    for page_number, page in enumerate(document, start=1):
+        drawn = _stroked_rect_frames(page)
+        frame_count += len(drawn)
+        boxes = [(_parallel_frame_id(page_number, index, frame, [item for item in frames if item.get("page") == page_number]),
+                  frame["bbox"]) for index, frame in enumerate(drawn, start=1)]
+        findings.extend({"page": page_number, **finding} for finding in find_adjacent_parallel_frames(boxes))
+    return {"rule": ADJACENT_PARALLEL_FRAME_REASON, "bucket": "HARD_FAIL", "min_gap_pt": ADJACENT_PARALLEL_FRAME_MIN_GAP_PT,
+            "measurement_basis": "pdf_stroke_path_rect", "frame_count": frame_count,
+            "adjacent_parallel_frames_pass": not findings, "findings": findings}
 
 
 def scan_rendered_pdf_boundaries(pdf_path: Path, frames: list[dict[str, Any]]) -> dict[str, Any]:
@@ -781,7 +1068,8 @@ def scan_rendered_pdf_boundaries(pdf_path: Path, frames: list[dict[str, Any]]) -
                 else:
                     rendered_page = document[page_number - 1]
                     for relation in frame["relations"]:
-                        target_bbox = _match_surface(rendered_page, relation)
+                        target_bbox = (_match_table_row(rendered_page, relation) if relation.get("table")
+                                       else _match_surface(rendered_page, relation))
                         if target_bbox is None:
                             frame_reasons.append("HTML-PDF-RELATION-EVIDENCE-01")
                             relation_checks.append({
@@ -805,6 +1093,9 @@ def scan_rendered_pdf_boundaries(pdf_path: Path, frames: list[dict[str, Any]]) -
                         })
                         if not relation_pass:
                             frame_reasons.append("HTML-PDF-RELATION-DRIFT-01")
+                    for declared_relation, check in zip(frame["relations"], relation_checks):
+                        if declared_relation.get("table"):
+                            check["table_row_index"] = declared_relation["table"]["row_index"]
             spacing = frame.get("spacing")
             if isinstance(spacing, dict):
                 intra = spacing.get("intra_frame_line_step")
@@ -847,6 +1138,9 @@ def scan_rendered_pdf_boundaries(pdf_path: Path, frames: list[dict[str, Any]]) -
                     "spacing_index": spacing.get("spacing_index"), "spacing_checks": spacing_checks}
                    if isinstance(spacing, dict) else {}),
             })
+        adjacent_parallel = _scan_adjacent_parallel_frames(document, frames)
+        if not adjacent_parallel["adjacent_parallel_frames_pass"]:
+            reasons.append(ADJACENT_PARALLEL_FRAME_REASON)
     groups: dict[tuple[int, str], list[tuple[dict[str, Any], dict[str, Any]]]] = {}
     for frame, result in zip(frames, frame_results):
         spacing = frame.get("spacing")
@@ -890,6 +1184,7 @@ def scan_rendered_pdf_boundaries(pdf_path: Path, frames: list[dict[str, Any]]) -
     return {"schema_version": "docs-html-pdf-rendered-boundaries-2" if layout_declared else "docs-html-pdf-rendered-boundaries-1",
             "pdf_sha256": sha256(pdf_path), "status": "pass" if not reasons else "block",
             "reason_codes": reasons, "frames": frame_results,
+            "adjacent_parallel_frames": adjacent_parallel,
             **({"spacing_pass": spacing_pass} if spacing_declared else {}),
             **({"alignment_pass": alignment_pass, "relation_pass": relation_pass,
                 "relation_sink": "AQ-RELATION-01"} if layout_declared else {})}

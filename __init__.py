@@ -538,6 +538,50 @@ def _declared_contract_from_task(task_id: str | None = None) -> Path | None:
     return Path(match.group(1)) if match else None
 
 
+LIVE_JEV_CJK_REVIEW_MODE = "live-jev-cjk-appearance"
+
+
+def _load_artifact_quality_checker() -> Any:
+    """Load this plugin's own checker (the file whose sha256 the receipt pins) so completion re-uses it."""
+    root = str(ARTIFACT_QUALITY_ROOT)
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    spec = importlib.util.spec_from_file_location(
+        "docs_final_output_artifact_quality_checker", ARTIFACT_QUALITY_ROOT / "check_docs_artifact_quality.py",
+    )
+    if spec is None or spec.loader is None:
+        raise ImportError("artifact-quality checker is unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _live_jev_accepts_review_candidates(
+    scan: dict[str, Any], limited: dict[str, Any], review: list[dict[str, Any]], artifact: Path | None,
+) -> bool:
+    """True only when this scan's live Jev accepted exactly the remaining CJK appearance candidates.
+
+    This adds no judgement of its own: the decision is the checker's `_jev_resolves_cjk_candidates`
+    (execution_mode=live, provider_invoked=true, reason_code=ok, accepted, formal evidence, candidate ids,
+    candidate_set_digest, artifact sha256, request/receipt re-validation). The scan's recorded claim
+    (review_mode/status/evidence/jev_resolution) must equal that recomputed result. Any miss -- fixture,
+    not_invoked, repair_required, uncertain, sha256/digest/id mismatch, forged review_mode, load failure --
+    returns False so the caller keeps requiring the docs-layout-visual-review-2 attachment.
+    """
+    if (artifact is None or not isinstance(limited, dict)
+            or limited.get("review_mode") != LIVE_JEV_CJK_REVIEW_MODE or limited.get("status") != "pass"
+            or limited.get("vision_model_invoked") is not False):
+        return False
+    try:
+        resolution = _load_artifact_quality_checker()._jev_resolves_cjk_candidates(
+            scan.get("generated_artifact_jev"), review, artifact,
+        )
+    except Exception:
+        return False
+    return (isinstance(resolution, dict) and limited.get("evidence") == resolution.get("receipt")
+            and limited.get("jev_resolution") == resolution)
+
+
 def _validate_scan_readback(
     scan: dict[str, Any], *, review_path: Path | None = None,
     artifact_set_id: str | None = None,
@@ -605,7 +649,9 @@ def _validate_scan_readback(
         return "AQ-LAYOUT-01: producer status differs from checker recount"
     if scan.get("measurement_basis") != "pdf_points":
         return "AQ-LAYOUT-01: scan measurement basis is not pdf_points"
-    if review:
+    # Candidates that live Jev accepted (re-confirmed above by the checker's own validator) need no separate
+    # visual record; every other review candidate still requires the docs-layout-visual-review-2 attachment.
+    if review and not _live_jev_accepts_review_candidates(scan, limited, review, artifact):
         if review_path is None:
             return "AQ-LAYOUT-01: review attachment is missing"
         review_data, error = _read_json_object(review_path, "AQ-LAYOUT-01 review attachment")
@@ -656,8 +702,7 @@ def _validate_artifact_quality_receipt(contract_path: Path, receipt_path: Path) 
         return set(), "artifact-quality receipt schema/status did not pass"
     if _contains_body_key(receipt) or _contains_body_key(contract):
         return set(), "artifact-quality contract/receipt contains forbidden body field"
-    allowed_receipt_fields = {"schema_version", "created_at", "status", "contract", "checker", "rulesets", "entries", "quality_layers", "finalization", "execution_contract"}
-    if not set(receipt).issubset(allowed_receipt_fields):
+    if _unsupported_artifact_quality_receipt_fields(receipt):
         return set(), "artifact-quality receipt has unsupported top-level fields"
     quality_layers = receipt.get("quality_layers")
     if not isinstance(quality_layers, list) or any(

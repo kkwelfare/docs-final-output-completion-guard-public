@@ -468,7 +468,7 @@
                       ]
                     },
                     "minItems": 0,
-                    "maxItems": 512
+                    "maxItems": 2000
                   },
                   "fonts": {
                     "type": "array",

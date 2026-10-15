@@ -299,7 +299,7 @@ def test_generated_artifact_jev_runs_without_legacy_opt_in_and_guard_reads_back(
     normal_receipt, _ = checker.build_receipt(normal_path, evidence_dir=tmp_path / "normal-evidence")
     normal_rule = next(rule for rule in normal_receipt["entries"][0]["rules"] if rule["id"] == "AQ-LAYOUT-01")
     normal_scan = json.loads(Path(normal_rule["evidence"]["path"]).read_text(encoding="utf-8"))
-    assert normal_scan["generated_artifact_jev"]["status"] == "connection_failed"
+    assert normal_scan["generated_artifact_jev"]["status"] == "not_invoked"
     assert normal_scan["generated_artifact_jev"]["evaluation_state"] == "error"
     assert normal_scan["generated_artifact_jev"]["reason_code"] == "evaluation_identity_unavailable"
     assert guard._validate_scan_readback(normal_scan, artifact=normal_pdf, generated_jev_required=True) is None
@@ -352,6 +352,43 @@ def test_generated_artifact_jev_runs_without_legacy_opt_in_and_guard_reads_back(
         # candidate disposition in the actual completion readback path.
         error = guard._validate_scan_readback(scan, artifact=badge_pdf, generated_jev_required=True)
         assert error == "AQ-LAYOUT-01: review attachment is missing"
+
+
+def test_generated_artifact_jev_same_task_identity_reaches_fixture_evaluation_via_checker(tmp_path):
+    checker = _load_checker()
+    badge_pdf = _pdf(tmp_path / "badge-same-task.pdf", lambda page: (
+        page.draw_circle((50, 50), 12, color=(0, 0, 0), fill=(0.9, 0.9, 0.9)),
+        page.insert_text((50, 53), "1", fontsize=8),
+        page.insert_text((62, 53), "A", fontsize=9),
+    ))
+    disabled = {"enabled": False,
+                "request": {"path": str(tmp_path / "unused-request.json"), "sha256": "0" * 64},
+                "receipt": {"path": str(tmp_path / "unused-receipt.json"), "sha256": "0" * 64}}
+    contract = {"artifact_kind": "pdf", "artifacts": [str(badge_pdf)],
+                "artifact_quality": {"required": True, "layout_typography": {
+                    "required": True, "minimum_gap_px": 0, "narrow_card_exemption_ratio": 0,
+                    "jev_post_render_review": disabled}}}
+    contract_path = tmp_path / "same-task-contract.json"
+    contract_path.write_text(json.dumps(contract), encoding="utf-8")
+    identity = {"artifact_set_id": "a" * 64,
+                "producer": {"task_id": "t_same_task", "run_id": 1},
+                "reviewer": {"task_id": "t_same_task", "run_id": 2}}
+
+    def accept(wire, timeout):  # fixture adapter only; no live Jev call
+        reviews = [{"candidate_id": c["id"], "disposition": "accepted",
+                    "criteria_results": [{"criterion": k, "status": "pass"} for k in c["criteria"]]}
+                   for c in wire["candidates"]]
+        return {"schema_version": "docs-jev-post-render-response-1",
+                "request_sha256": wire["request_sha256"], "reviews": reviews}
+
+    receipt, _ = checker.build_receipt(contract_path, evidence_dir=tmp_path / "same-task-evidence",
+                                       jev_fixture_identity=identity, jev_fixture_adapter=accept)
+    layout_rule = next(rule for rule in receipt["entries"][0]["rules"] if rule["id"] == "AQ-LAYOUT-01")
+    route = json.loads(Path(layout_rule["evidence"]["path"]).read_text(encoding="utf-8"))["generated_artifact_jev"]
+    assert route["status"] == "evaluated" and route["execution_mode"] == "fixture"
+    assert route["formal_provider_evidence"] is False
+    request = json.loads(Path(route["request"]["path"]).read_text(encoding="utf-8"))
+    assert request["reviewer"]["task_id"] == request["binding"]["producer"]["task_id"] == "t_same_task"
 
 
 def test_pdf_layout_contract_missing_false_and_non_dict_fail_closed(tmp_path):

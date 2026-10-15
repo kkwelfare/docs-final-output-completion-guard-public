@@ -118,8 +118,8 @@ def scan_candidates(scan: dict, *, allow_empty: bool = False) -> list[dict]:
 def validate_request(request: dict) -> dict:
     validate_schema(request, "request")
     b = request["binding"]
-    if request["reviewer"]["task_id"] == b["producer"]["task_id"]:
-        raise PostRenderError("identity_drift")
+    # Master decision: a separate reviewer task is not required; the producing task may
+    # call Jev itself. Reviewer/producer identity shape is still enforced by the request schema.
     check_handle(b["artifact"])
     scan = read_json(check_handle(b["scan"]))
     if scan.get("artifact_sha256") != b["artifact"]["sha256"]:

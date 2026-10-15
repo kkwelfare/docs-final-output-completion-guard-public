@@ -13,6 +13,10 @@ from . import cjk_font_selector
 CRITERION = 'cjk_glyph_locale'
 RULE = 'cjk_glyph_or_region_appearance_anomaly_candidate'
 CHOICES = ['japanese_glyph_likely', 'non_japanese_glyph_likely', 'uncertain']
+# Per-region cap on collected CJK glyph records. Keep equal to glyphs.maxItems in
+# schemas/docs-jev-post-render-request-1.json. The provider wire carries only a fixed-size aggregate
+# (jev_post_render.wire_metrics), so this cap is bounded by the request JSON cap, not MAX_WIRE_BYTES.
+MAX_GLYPHS = 2000
 
 
 def sha(data):
@@ -119,7 +123,7 @@ def measure(artifact: Path, page_number: int, bbox: list, render: dict) -> dict:
                         glyphs.append({'bbox':[round(v,4) for v in box],
                             'contained':region.contains(box), 'span_flags':int(span['flags']),
                             'font_xref':matches[0]['xref'] if len(matches) == 1 else 0})
-                        if len(glyphs) > 512:
+                        if len(glyphs) > MAX_GLYPHS:
                             raise ValueError('insufficient_evidence')
         # Numeric raster summaries remain local-derived proxies. No pixels leave.
         if region.width * region.height > 1_000_000:

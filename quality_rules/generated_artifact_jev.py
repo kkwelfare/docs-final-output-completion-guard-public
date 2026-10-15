@@ -14,6 +14,10 @@ from typing import Any, Callable
 
 from . import jev_post_render
 
+# Status for routes that stopped before any Jev/provider call. It is deliberately
+# distinct from "connection_failed", which is reserved for a real provider/transport failure.
+NOT_INVOKED = "not_invoked"
+
 
 def _handle(path: Path) -> dict[str, str]:
     return {"path": str(path.resolve()), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
@@ -42,7 +46,7 @@ def run(*, artifact: Path, scan: dict[str, Any], evidence_dir: Path,
                 "formal_provider_evidence": False, "evaluation_state": "error",
                 "reason_code": "deterministic_hard_fail"}
     if review and not supported:
-        return {"status": "connection_failed", "candidate_count": len(review),
+        return {"status": NOT_INVOKED, "candidate_count": len(review),
                 "formal_provider_evidence": False, "evaluation_state": "error",
                 "reason_code": "no_supported_candidate_type"}
     valid_id = (isinstance(artifact_set_id, str) and len(artifact_set_id) == 64
@@ -52,9 +56,12 @@ def run(*, artifact: Path, scan: dict[str, Any], evidence_dir: Path,
         and bool(value.get("task_id")) and isinstance(value.get("run_id"), int)
         and not isinstance(value.get("run_id"), bool) and value["run_id"] > 0
     )
-    if (not valid_id or not valid_identity(producer) or not valid_identity(reviewer)
-            or producer.get("task_id") == reviewer.get("task_id")):
-        return {"status": "connection_failed", "candidate_count": len(supported),
+    if reviewer is None and valid_identity(producer):
+        # Master decision: the producing task may call Jev itself; a separate reviewer
+        # task is not required. Without an explicit reviewer the producer identity is used.
+        reviewer = dict(producer)
+    if not valid_id or not valid_identity(producer) or not valid_identity(reviewer):
+        return {"status": NOT_INVOKED, "candidate_count": len(supported),
                 "formal_provider_evidence": False, "evaluation_state": "error",
                 "reason_code": "evaluation_identity_unavailable"}
 
@@ -72,6 +79,8 @@ def run(*, artifact: Path, scan: dict[str, Any], evidence_dir: Path,
     raw_path = (evidence_dir / f"{artifact.stem}.AQ-LAYOUT-01.JEV.raw.json").resolve()
     request_path = (evidence_dir / f"{artifact.stem}.AQ-LAYOUT-01.JEV.request.json").resolve()
     receipt_path = (evidence_dir / f"{artifact.stem}.AQ-LAYOUT-01.JEV.receipt.json").resolve()
+    receipt = None  # set once evidence is reused or jev_post_render.evaluate() has returned
+    evaluation_started = False  # True from the moment jev_post_render.evaluate() is entered
     try:
         _dump(raw_path, route_scan)
         request = jev_post_render.build_request(
@@ -100,6 +109,7 @@ def run(*, artifact: Path, scan: dict[str, Any], evidence_dir: Path,
                 pass
         _dump(request_path, request)
         if receipt is None:
+            evaluation_started = True
             receipt = jev_post_render.evaluate(request, fixture_adapter=fixture_adapter)
         _dump(receipt_path, receipt)
         # Re-open and validate exact persisted bytes. Fixture-only evidence is
@@ -119,7 +129,8 @@ def run(*, artifact: Path, scan: dict[str, Any], evidence_dir: Path,
             and stored_receipt.get("status") in {"accepted", "uncertain", "repair_required"}
         )
         return {
-            "status": "evaluated" if evaluated else "connection_failed",
+            "status": ("evaluated" if evaluated
+                       else "connection_failed" if provider_invoked else NOT_INVOKED),
             "evaluation_state": "evidence_reused" if evidence_reused else "executed",
             "candidate_count": len(supported),
             "review_scope": request["binding"]["review_scope"],
@@ -133,16 +144,31 @@ def run(*, artifact: Path, scan: dict[str, Any], evidence_dir: Path,
         }
     except Exception as exc:
         reason = str(exc) if isinstance(exc, jev_post_render.PostRenderError) else "provider_or_evidence_error"
-        return {"status": "connection_failed", "candidate_count": len(supported),
-                "formal_provider_evidence": False, "evaluation_state": "error", "reason_code": reason,
-                "raw_scan": _handle(raw_path) if raw_path.is_file() else None}
+        failure = {"candidate_count": len(supported),
+                   "formal_provider_evidence": False, "evaluation_state": "error", "reason_code": reason,
+                   "raw_scan": _handle(raw_path) if raw_path.is_file() else None}
+        # Only a failure after the Jev/provider call is "connection_failed". An exception raised
+        # before the call (e.g. jev_glyph_locale.measure -> insufficient_evidence while the request is
+        # built) never reached the provider: keep its own reason and record it as not_invoked.
+        if receipt is not None:
+            invoked = receipt.get("provider_invoked") is True
+        else:
+            # evaluate() itself raised, so the provider call cannot be ruled out: keep connection_failed.
+            invoked = None if evaluation_started else False
+        if invoked is False:
+            return {"status": NOT_INVOKED, "provider_invoked": False, **failure}
+        if invoked:
+            failure["provider_invoked"] = True
+        return {"status": "connection_failed", **failure}
 
 
 def validate_readback(scan: dict[str, Any], state: dict[str, Any]) -> str | None:
     """Validate route selection and any persisted request/receipt handles."""
     if not isinstance(state, dict) or state.get("status") not in {
-            "not_applicable", "scanned_no_candidates", "evaluated", "connection_failed"}:
+            "not_applicable", "scanned_no_candidates", "evaluated", "connection_failed", NOT_INVOKED}:
         return "AQ-LAYOUT-01: generated-artifact Jev route status is missing or invalid"
+    if state.get("status") == NOT_INVOKED and state.get("provider_invoked") is True:
+        return "AQ-LAYOUT-01: generated-artifact Jev not_invoked state conflicts with provider invocation"
     issues = scan.get("issues", []) if isinstance(scan.get("issues"), list) else []
     supported = [item for item in issues if isinstance(item, dict)
                  and item.get("severity") == "review"
@@ -156,7 +182,7 @@ def validate_readback(scan: dict[str, Any], state: dict[str, Any]) -> str | None
         return "AQ-LAYOUT-01: generated-artifact Jev evaluated state conflicts with execution error"
     if supported and state.get("status") == "scanned_no_candidates":
         return "AQ-LAYOUT-01: generated-artifact Jev candidate scan was omitted"
-    if state.get("status") in {"evaluated", "connection_failed"}:
+    if state.get("status") in {"evaluated", "connection_failed", NOT_INVOKED}:
         if isinstance(state.get("request"), dict) or isinstance(state.get("receipt"), dict):
             try:
                 request_path = jev_post_render.check_handle(state["request"])

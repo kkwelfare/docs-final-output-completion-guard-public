@@ -64,7 +64,16 @@
     }, "additionalProperties": false},
     "relation": {"type": "object", "required": ["target_id_hash", "target_kind", "target_bbox_pt", "relation", "min_gap_pt"], "properties": {
       "target_id_hash": {"$ref": "#/$defs/shortHash"}, "target_kind": {"enum": ["surface", "image", "shape"]}, "target_bbox_pt": {"$ref": "#/$defs/bbox"},
-      "relation": {"enum": ["inside", "outside", "no_overlap"]}, "min_gap_pt": {"type": "number", "minimum": 0}
+      "relation": {"enum": ["inside", "outside", "no_overlap"]}, "min_gap_pt": {"type": "number", "minimum": 0},
+      "surface_style": {"$ref": "#/$defs/surfaceStyle"}, "table": {"$ref": "#/$defs/tableRow"}
+    }, "additionalProperties": false},
+    "tableRow": {"type": "object", "required": ["group_id_hash", "row_index"], "properties": {
+      "group_id_hash": {"$ref": "#/$defs/shortHash"}, "row_index": {"type": "integer", "minimum": 0},
+      "row_count": {"type": "integer", "minimum": 2}, "outer_bbox_pt": {"$ref": "#/$defs/bbox"}
+    }, "additionalProperties": false},
+    "surfaceStyle": {"type": "object", "minProperties": 1, "properties": {
+      "border_color": {"type": "string", "pattern": "^#[0-9a-f]{6}$"}, "border_width_pt": {"type": "number", "exclusiveMinimum": 0},
+      "background_color": {"type": "string", "pattern": "^#[0-9a-f]{6}$"}
     }, "additionalProperties": false},
     "geometry": {"type": "object", "required": ["frame_bbox_pt", "safe_width_pt", "font_size_pt", "margins_pt", "max_lines"], "properties": {
       "frame_bbox_pt": {"$ref": "#/$defs/bbox"}, "frame_width_pt": {"type": "number", "exclusiveMinimum": 0}, "safe_width_pt": {"type": "number", "exclusiveMinimum": 0},
@@ -85,7 +94,8 @@
     "rendered": {"type": "object", "required": ["schema_version", "pdf_sha256", "status", "reason_codes", "frames", "alignment_pass", "relation_pass", "relation_sink"], "properties": {
       "schema_version": {"const": "docs-html-pdf-rendered-boundaries-2"}, "pdf_sha256": {"$ref": "#/$defs/hash"}, "status": {"enum": ["pass", "block"]},
       "reason_codes": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}, "frames": {"type": "array", "items": {"type": "object"}},
-      "spacing_pass": {"type": "boolean"}, "alignment_pass": {"type": "boolean"}, "relation_pass": {"type": "boolean"}, "relation_sink": {"const": "AQ-RELATION-01"}
+      "spacing_pass": {"type": "boolean"}, "alignment_pass": {"type": "boolean"}, "relation_pass": {"type": "boolean"}, "relation_sink": {"const": "AQ-RELATION-01"},
+      "adjacent_parallel_frames": {"type": "object"}
     }}
   }
 }

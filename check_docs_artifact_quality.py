@@ -284,6 +284,55 @@ def _candidate_set_digest(candidates: list[dict[str, Any]]) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def _jev_resolves_cjk_candidates(
+    state: Any, candidates: list[dict[str, Any]], artifact: Path,
+) -> dict[str, Any] | None:
+    """Return decision handles only when this run's live Jev accepted exactly these CJK candidates.
+
+    Every other outcome keeps the candidates review-required (returns None): fixture or
+    not_invoked/connection_failed/unresolved runs, uncertain or repair_required dispositions,
+    a non-CJK candidate in the set, and any candidate id/descriptor/digest or artifact sha256 mismatch.
+    """
+    try:
+        rule = jev_post_render.jev_glyph_locale.RULE
+        if (not candidates or not isinstance(state, dict)
+                or any(not isinstance(item, dict) or item.get("rule") != rule or item.get("severity") != "review"
+                       or not isinstance(item.get("id"), str) for item in candidates)
+                or state.get("status") != "evaluated" or state.get("execution_mode") != "live"
+                or state.get("provider_invoked") is not True or state.get("reason_code") != "ok"
+                or state.get("provider_status") != "accepted" or state.get("formal_provider_evidence") is not True
+                or state.get("candidate_count") != len(candidates)):
+            return None
+        request = jev_post_render.read_json(jev_post_render.check_handle(state["request"]))
+        receipt = jev_post_render.read_json(jev_post_render.check_handle(state["receipt"]))
+        jev_post_render.validate_request(request)  # re-binds artifact, scan, candidates and measurements
+        jev_post_render.validate_schema(receipt, "receipt")
+        binding = request["binding"]
+        by_id = {item["id"]: item for item in request["candidates"]}
+        if (len(by_id) != len(candidates) or set(by_id) != {item["id"] for item in candidates}
+                or binding.get("review_scope") != "candidates"
+                or binding["artifact"] != {"path": str(artifact.resolve()), "sha256": sha256(artifact)}
+                or binding["candidate_set_digest"] != jev_post_render.candidate_digest(request["candidates"])
+                or any(by_id[item["id"]]["rule"] != rule or by_id[item["id"]]["page"] != item.get("page")
+                       or by_id[item["id"]]["bbox_pdf_points"] != item.get("bbox_pdf_points") for item in candidates)
+                or receipt.get("execution_mode") != "live" or receipt.get("provider_invoked") is not True
+                or receipt.get("reason_code") != "ok" or receipt.get("status") != "accepted"
+                or receipt.get("request_sha256") != jev_post_render.digest(request)
+                or receipt.get("binding") != binding or receipt.get("reviewer") != request["reviewer"]):
+            return None
+        response = {"schema_version": "docs-jev-post-render-response-1",
+                    "request_sha256": receipt["request_sha256"], "reviews": receipt["reviews"]}
+        if jev_post_render._validate_reviews(response, request) != "accepted":
+            return None
+        if receipt.get("measurements") != jev_post_render.build_wire(request)[1]:
+            return None
+        return {"request": state["request"], "receipt": state["receipt"],
+                "candidate_set_digest": binding["candidate_set_digest"],
+                "artifact_sha256": binding["artifact"]["sha256"], "candidate_ids": sorted(by_id)}
+    except Exception:
+        return None
+
+
 def _layout_review_passes(
     review_path: Path, artifact: Path, scan_path: Path,
     candidates: list[dict[str, Any]], *, artifact_set_id: str | None = None,
@@ -830,6 +879,11 @@ def build_receipt(
                     # The receiver's identity is accepted only after validating its
                     # hash-bound copy receipt against the producer manifest.
                     reviewer_identity = jev_runtime_reviewer
+                    if reviewer_identity is None and isinstance(producer_identity, dict):
+                        # Master decision: no separate receiver record is required. Reuse only the
+                        # finalization-manifest producer identity (validated above); nothing is
+                        # derived from the environment and no value is fabricated.
+                        reviewer_identity = dict(producer_identity)
                 scan["generated_artifact_jev"] = generated_artifact_jev.run(
                     artifact=artifact, scan=scan, evidence_dir=evidence,
                     artifact_set_id=(fixture_artifact_set_id or finalization_manifest.get("artifact_set_id")
@@ -1044,6 +1098,21 @@ def build_receipt(
                         "vision_model_invoked": False,
                         "evidence": None,
                         "status": "pass" if review_passed else "review-required",
+                    }
+                elif candidates and (jev_resolution := _jev_resolves_cjk_candidates(
+                        scan.get("generated_artifact_jev"), candidates, artifact)) is not None:
+                    # Same-run live Jev accepted exactly these CJK appearance candidates (ids, digest and
+                    # artifact sha256 re-bound above): no manual visual record is required for them.
+                    review_passed = True
+                    limited_review = {
+                        "required": True,
+                        "candidate_count": len(candidates),
+                        "candidate_pages": sorted({item["page"] for item in candidates if isinstance(item.get("page"), int)}),
+                        "review_mode": "live-jev-cjk-appearance",
+                        "vision_model_invoked": False,
+                        "evidence": jev_resolution["receipt"],
+                        "jev_resolution": jev_resolution,
+                        "status": "pass",
                     }
                 else:
                     review_passed = True if not candidates else _layout_review_passes(
