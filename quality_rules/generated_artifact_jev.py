@@ -103,6 +103,8 @@ def run(*, artifact: Path, scan: dict[str, Any], evidence_dir: Path,
                 if (jev_post_render.digest(previous_request) == jev_post_render.digest(request)
                         and previous_receipt.get("request_sha256") == jev_post_render.digest(request)
                         and previous_receipt.get("execution_mode") == expected_mode):
+                    # Split requests reuse only a receipt whose chunk records match this request.
+                    jev_post_render.validate_receipt_chunks(request, previous_receipt)
                     receipt = previous_receipt
                     evidence_reused = True
             except Exception:
@@ -120,6 +122,7 @@ def run(*, artifact: Path, scan: dict[str, Any], evidence_dir: Path,
         jev_post_render.validate_schema(stored_receipt, "receipt")
         if stored_receipt.get("request_sha256") != jev_post_render.digest(stored_request):
             raise jev_post_render.PostRenderError("identity_drift")
+        jev_post_render.validate_receipt_chunks(stored_request, stored_receipt)
         execution_mode = stored_receipt.get("execution_mode")
         evaluated = stored_receipt.get("status") != "unresolved"
         provider_invoked = stored_receipt.get("provider_invoked") is True
@@ -128,7 +131,7 @@ def run(*, artifact: Path, scan: dict[str, Any], evidence_dir: Path,
             and stored_receipt.get("reason_code") == "ok"
             and stored_receipt.get("status") in {"accepted", "uncertain", "repair_required"}
         )
-        return {
+        state = {
             "status": ("evaluated" if evaluated
                        else "connection_failed" if provider_invoked else NOT_INVOKED),
             "evaluation_state": "evidence_reused" if evidence_reused else "executed",
@@ -142,6 +145,9 @@ def run(*, artifact: Path, scan: dict[str, Any], evidence_dir: Path,
             "request": _handle(request_path), "receipt": _handle(receipt_path),
             "raw_scan": _handle(raw_path),
         }
+        if isinstance(stored_receipt.get("wire_chunks"), list):
+            state["wire_chunk_count"] = len(stored_receipt["wire_chunks"])
+        return state
     except Exception as exc:
         reason = str(exc) if isinstance(exc, jev_post_render.PostRenderError) else "provider_or_evidence_error"
         failure = {"candidate_count": len(supported),
@@ -191,6 +197,7 @@ def validate_readback(scan: dict[str, Any], state: dict[str, Any]) -> str | None
                 receipt = jev_post_render.read_json(receipt_path)
                 jev_post_render.validate_request(request)
                 jev_post_render.validate_schema(receipt, "receipt")
+                jev_post_render.validate_receipt_chunks(request, receipt)
                 expected_ids = {item["id"] for item in supported}
                 expected_scope = "candidates" if supported else "whole_artifact"
                 receipt_mode = receipt.get("execution_mode")
@@ -220,10 +227,78 @@ def validate_readback(scan: dict[str, Any], state: dict[str, Any]) -> str | None
                         or state.get("provider_status") != receipt.get("status")
                         or state.get("provider_invoked") is not provider_invoked
                         or state.get("formal_provider_evidence") is not formal_provider_evidence
-                        or (state.get("status") == "evaluated") != (receipt.get("status") != "unresolved")):
+                        or (state.get("status") == "evaluated") != (receipt.get("status") != "unresolved")
+                        or state.get("wire_chunk_count") != (len(receipt["wire_chunks"])
+                                                             if isinstance(receipt.get("wire_chunks"), list) else None)):
                     return "AQ-LAYOUT-01: generated-artifact Jev request/receipt readback mismatch"
             except Exception:
                 return "AQ-LAYOUT-01: generated-artifact Jev request/receipt readback failed"
         elif state.get("status") == "evaluated" or not state.get("reason_code"):
             return "AQ-LAYOUT-01: generated-artifact Jev failed state lacks an explicit reason"
     return None
+
+
+# Plan C (master decision): a layout-required generated PDF that Jev could evaluate does not
+# complete until this artifact has live provider evidence. Only "Jev was not run" stops;
+# the Jev result itself (accepted / uncertain / repair_required) keeps its existing handling.
+NOT_ELIGIBLE_REASONS = {"deterministic_hard_fail", "no_supported_candidate_type"}
+
+REASON_GUIDANCE = {
+    "live_provider_not_allowed": "契約の artifact_quality.layout_typography.allow_live_provider が true ではありません。true にしてチェッカーを再実行してください",
+    "evaluation_identity_unavailable": "finalization manifest の created_by_task_id / created_by_run_id（1以上）か artifact_set_id が使えません。producer を --task-id 付きで実行し、実際の run ID を入れてください",
+    "provider_unavailable": "Jev の API キーがこの環境にありません。キーのある環境でチェッカーを再実行してください",
+    "invalid_request": "送信データを作れませんでした（候補1件だけで送信上限 32,000 bytes を超える場合を含む）。範囲を分けるか候補を減らして作り直してください",
+    "insufficient_evidence": "CJK字形の証拠が足りません（範囲の端に字形がかかっている、字形数が上限を超える等）。cjk_appearance_regions を見直して作り直してください",
+    "timeout": "Jev の応答が時間内に返りませんでした。自動では再試行しません。default に報告してください",
+    "provider_error": "Jev の呼び出しが失敗しました。自動では再試行しません。default に報告してください",
+    "malformed_response": "Jev の応答を検証できませんでした。default に報告してください",
+    "identity_drift": "Jev の request/receipt と成果物・スキャンの結び付きが合いません。チェッカーを再実行してください",
+    "fixture_only": "fixture の結果しかありません。live の呼び出しが必要です",
+    "jev_state_missing": "Jev 経路の記録がスキャンにありません。現行チェッカーで再実行してください",
+}
+
+
+def effective_reason_code(state: Any) -> str | None:
+    """Human-facing reason for this route state (derives live_provider_not_allowed)."""
+    if not isinstance(state, dict):
+        return "jev_state_missing"
+    reason = state.get("reason_code")
+    request_handle = state.get("request")
+    if (state.get("provider_invoked") is not True and isinstance(request_handle, dict)
+            and reason in {None, "provider_unavailable"}):
+        try:
+            request = jev_post_render.read_json(Path(str(request_handle.get("path"))))
+            if request.get("allow_live_provider") is not True:
+                return "live_provider_not_allowed"
+        except Exception:
+            pass
+    if state.get("status") == "evaluated" and state.get("execution_mode") == "fixture":
+        return "fixture_only"
+    if state.get("status") == "scanned_no_candidates":
+        return "jev_state_missing"
+    return reason if isinstance(reason, str) and reason else None
+
+
+def jev_required_block_reason(scan: dict[str, Any], state: Any) -> str | None:
+    """Return a readable block reason when an eligible generated PDF lacks live Jev evidence."""
+    if isinstance(state, dict) and (state.get("status") == "not_applicable"
+                                    or state.get("reason_code") in NOT_ELIGIBLE_REASONS):
+        return None
+    if (isinstance(state, dict) and state.get("status") == "evaluated"
+            and state.get("execution_mode") == "live" and state.get("provider_invoked") is True
+            and state.get("reason_code") == "ok" and state.get("formal_provider_evidence") is True
+            and state.get("provider_status") in {"accepted", "uncertain", "repair_required"}):
+        try:
+            receipt = jev_post_render.read_json(jev_post_render.check_handle(state["receipt"]))
+            chunks = receipt.get("wire_chunks")
+            if (receipt.get("execution_mode") == "live" and receipt.get("provider_invoked") is True
+                    and receipt.get("reason_code") == "ok"
+                    and (chunks is None or all(c.get("provider_invoked") is True for c in chunks))):
+                return None
+        except Exception:
+            pass
+        code = "identity_drift"
+    else:
+        code = effective_reason_code(state) or "provider_unavailable"
+    guidance = REASON_GUIDANCE.get(code, "Jev が呼ばれていません。default に報告してください")
+    return f"AQ-LAYOUT-01: Jevの評価がないため完了できません（reason_code={code}）: {guidance}"

@@ -161,6 +161,11 @@ def test_live_accepted_exact_match_passes_without_visual_record(tmp_path, monkey
 def test_not_accepted_or_non_live_jev_still_requires_visual_record(tmp_path, monkeypatch, mode):
     s = _scenario(tmp_path, monkeypatch, mode)
     forged = _scan(s)  # claims live-jev-cjk-appearance / pass with whatever handles exist
+    if mode in {"not_invoked", "connection_failed", "fixture"}:
+        # Plan C: Jev was not run live for this artifact, so completion stops on that first.
+        assert _readback(s, forged).startswith("AQ-LAYOUT-01: Jevの評価がないため完了できません（reason_code=")
+        assert _readback(s, forged, required=False) == MISSING
+        return
     assert _readback(s, forged) == MISSING
     if isinstance(s.state.get("receipt"), dict):
         # A Jev receipt is not a docs-layout-visual-review-2 record.

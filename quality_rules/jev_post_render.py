@@ -517,8 +517,7 @@ def wire_metrics(metrics: dict) -> dict:
     return result
 
 
-def build_wire(request: dict) -> tuple[dict, list[dict]]:
-    validate_request(request)
+def _wire_rows(request: dict) -> tuple[list[dict], list[dict]]:
     rows=[]; records=[]
     for c in request["candidates"]:
         keys = ["id","rule","page","bbox_pdf_points","affected_pages","criteria","semantic_role"]
@@ -529,18 +528,153 @@ def build_wire(request: dict) -> tuple[dict, list[dict]]:
         rows[-1]["metrics_sha256"] = digest(c["metrics"])
         rows[-1]["render_sha256"]=c["render"]["sha256"]
         records.append({"candidate_id":c["id"],"render_sha256":c["render"]["sha256"],"metrics_sha256":digest(c["metrics"])})
+    return rows, records
+
+
+def _assemble_wire(request: dict, rows: list[dict], chunk: dict | None = None) -> dict:
     b=request["binding"]
     wire={"schema_version":"docs-jev-post-render-wire-1","request_sha256":digest(request),
           "artifact_sha256":b["artifact"]["sha256"],"scan_sha256":b["scan"]["sha256"],
           "artifact_set_id":b["artifact_set_id"],"producer":b["producer"],"reviewer":request["reviewer"],
           "candidate_set_digest":b["candidate_set_digest"],"review_scope":b.get("review_scope", "candidates"),
           "advisory_only":True,"candidates":rows}
+    if chunk is not None:
+        # Only present when the request is split; the unsplit wire is byte-identical to before.
+        wire["chunk"] = chunk
     if "whole_artifact" in request:
         wire["whole_artifact"] = copy.deepcopy(request["whole_artifact"])
+    return wire
+
+
+def _wire_fits(wire: dict) -> bool:
     if len(canonical(wire)) > MAX_WIRE_BYTES:
+        return False
+    try:
+        build_provider_payload(wire)  # Include JSON escaping and questions in the cap.
+    except PostRenderError:
+        return False
+    return True
+
+
+def _chunk_descriptor(request: dict, ids: list[str], index: int, count: int) -> dict:
+    by_id = {c["id"]: c for c in request["candidates"]}
+    return {"index": index, "count": count, "candidate_ids": list(ids),
+            "candidate_set_digest": candidate_digest([by_id[i] for i in ids])}
+
+
+def build_wire_chunks(request: dict) -> tuple[list[dict], list[dict]]:
+    """Return one wire when it fits MAX_WIRE_BYTES; otherwise split candidates in order.
+
+    MAX_WIRE_BYTES is unchanged. Candidates are packed greedily, in request order,
+    into as few wires as fit. Every chunk carries the full request_sha256 and full
+    candidate_set_digest plus its own chunk descriptor, so each provider call stays
+    bound to the one validated request. A single candidate that does not fit alone,
+    or an oversize whole-artifact summary, remains invalid_request.
+    """
+    validate_request(request)
+    rows, records = _wire_rows(request)
+    whole = _assemble_wire(request, rows)
+    if _wire_fits(whole):
+        return [whole], records
+    if len(rows) < 2:
         raise PostRenderError("invalid_request")
-    build_provider_payload(wire)  # Include JSON escaping and questions in the cap.
-    return wire, records
+    total = len(rows)
+    ids_of = [row["id"] for row in rows]
+    groups: list[list[int]] = []
+    current: list[int] = []
+    for index in range(total):
+        trial = current + [index]
+        # Size the trial with the largest possible index/count digits.
+        probe = _assemble_wire(request, [rows[i] for i in trial],
+                               _chunk_descriptor(request, [ids_of[i] for i in trial], total, total))
+        if _wire_fits(probe):
+            current = trial
+            continue
+        if not current:
+            raise PostRenderError("invalid_request")  # one candidate alone exceeds the cap
+        groups.append(current)
+        current = [index]
+        alone = _assemble_wire(request, [rows[index]],
+                               _chunk_descriptor(request, [ids_of[index]], total, total))
+        if not _wire_fits(alone):
+            raise PostRenderError("invalid_request")
+    groups.append(current)
+    count = len(groups)
+    wires = [_assemble_wire(request, [rows[i] for i in group],
+                            _chunk_descriptor(request, [ids_of[i] for i in group], position, count))
+             for position, group in enumerate(groups)]
+    if count < 2 or any(not _wire_fits(w) for w in wires):
+        raise PostRenderError("invalid_request")
+    return wires, records
+
+
+def build_wire(request: dict) -> tuple[dict, list[dict]]:
+    """Single-wire form (unchanged contract): raise invalid_request when a split is needed."""
+    wires, records = build_wire_chunks(request)
+    if len(wires) != 1:
+        raise PostRenderError("invalid_request")
+    return wires[0], records
+
+
+def measurement_records(request: dict) -> list[dict]:
+    """Receipt measurement records for split and unsplit requests alike."""
+    return build_wire_chunks(request)[1]
+
+
+def expected_wire_chunks(request: dict) -> list[dict] | None:
+    """Recompute the hash-bound chunk records; None when the request is not split."""
+    wires, _ = build_wire_chunks(request)
+    if len(wires) == 1:
+        return None
+    return [{"index": w["chunk"]["index"], "candidate_ids": list(w["chunk"]["candidate_ids"]),
+             "wire_sha256": digest(w)} for w in wires]
+
+
+def validate_receipt_chunks(request: dict, receipt: dict) -> None:
+    """Bind receipt wire_chunks to the recomputed split; raise identity_drift on mismatch."""
+    recorded = receipt.get("wire_chunks")
+    try:
+        expected = expected_wire_chunks(request)
+    except PostRenderError:
+        # Unbuildable request (e.g. one candidate over the cap): nothing may have been sent.
+        if recorded is not None or receipt.get("provider_invoked") is True:
+            raise PostRenderError("identity_drift")
+        return
+    if expected is None:
+        if recorded is not None:
+            raise PostRenderError("identity_drift")
+        return
+    if recorded is None:
+        if receipt.get("measurements") or receipt.get("provider_invoked") is True:
+            raise PostRenderError("identity_drift")
+        return
+    if (not isinstance(recorded, list) or len(recorded) != len(expected)
+            or any(not isinstance(r, dict) or {k: r.get(k) for k in ("index", "candidate_ids", "wire_sha256")} != e
+                   for r, e in zip(recorded, expected))):
+        raise PostRenderError("identity_drift")
+    invoked = [r.get("provider_invoked") is True for r in recorded]
+    if receipt.get("provider_invoked") is not True:
+        if any(invoked):
+            raise PostRenderError("identity_drift")
+        return
+    # Chunks are sent in order without retry: invoked chunks form a non-empty prefix.
+    if not invoked[0] or any(later and not earlier for earlier, later in zip(invoked, invoked[1:])):
+        raise PostRenderError("identity_drift")
+    if receipt.get("status") != "unresolved" and not all(invoked):
+        raise PostRenderError("identity_drift")
+
+
+def _merge_chunk_responses(responses: list[Any], wires: list[dict], request: dict) -> dict:
+    reviews = []
+    for response, wire in zip(responses, wires):
+        if (not isinstance(response, dict) or response.get("request_sha256") != digest(request)
+                or "whole_artifact_review" in response or not isinstance(response.get("reviews"), list)
+                or [r.get("candidate_id") if isinstance(r, dict) else None for r in response["reviews"]]
+                != wire["chunk"]["candidate_ids"]):
+            raise PostRenderError("malformed_response")
+        reviews.extend(copy.deepcopy(response["reviews"]))
+    return {"schema_version": "docs-jev-post-render-response-1", "request_sha256": digest(request),
+            "reviews": reviews}
 
 
 def build_provider_payload(wire: dict) -> tuple[dict, list[tuple[str, str, str]]]:
@@ -605,6 +739,8 @@ def text_provider(wire: dict, timeout: float) -> dict:
     payload, mapping = build_provider_payload(wire)
     questions = payload["questions"]
     request_id = "jev-docs-render-" + str(wire.get("request_sha256", "unknown"))[:20]
+    if isinstance(wire.get("chunk"), dict):
+        request_id += f"-c{wire['chunk'].get('index')}"
     jev_overlap._jev_lifecycle("provider_start", ROUTE, request_id, provider="typesafe-system-one", attempt=1)
     try:
         raw=jev_overlap._post_provider(jev_overlap.PRIMARY_ENDPOINT,jev_overlap.PRIMARY_API_KEY_ENV,
@@ -758,8 +894,12 @@ def evaluate(request: dict, *, fixture_adapter: Callable | None = None) -> dict:
                "provider_invoked": False, "advisory_only": True, "input_kind": "post-render-metrics", "status": "unresolved",
                "reason_code": "provider_unavailable", "measurements": [], "reviews": []}
     try:
-        wire, records = build_wire(request)
+        wires, records = build_wire_chunks(request)
         receipt["measurements"] = records
+        split = len(wires) > 1
+        if split:
+            receipt["wire_chunks"] = [{"index": w["chunk"]["index"], "candidate_ids": list(w["chunk"]["candidate_ids"]),
+                                       "wire_sha256": digest(w), "provider_invoked": False} for w in wires]
         if any(c["rule"] == jev_glyph_locale.RULE and not c["metrics"]["glyph_locale"]["evidence_sufficient"] for c in request["candidates"]):
             raise PostRenderError("insufficient_evidence")
         fn = fixture_adapter
@@ -768,9 +908,14 @@ def evaluate(request: dict, *, fixture_adapter: Callable | None = None) -> dict:
         if fn is None:
             return receipt
         receipt["provider_invoked"] = True
-        response = _bounded_call(fn, wire, float(request["timeout_seconds"]))
+        responses = []
+        for position, wire in enumerate(wires):  # sequential, no retry; one call per chunk
+            if split:
+                receipt["wire_chunks"][position]["provider_invoked"] = True
+            responses.append(_bounded_call(fn, wire, float(request["timeout_seconds"])))
+        response = _merge_chunk_responses(responses, wires, request) if split else responses[0]
         status = _validate_reviews(response, request)
-        jev_overlap._jev_lifecycle("validated_response", ROUTE, "jev-docs-render-" + str(wire.get("request_sha256", "unknown"))[:20], status="valid")
+        jev_overlap._jev_lifecycle("validated_response", ROUTE, "jev-docs-render-" + str(digest(request))[:20], status="valid")
         validate_request(request)  # detect artifact/scan/image mutation during call
         receipt.update(status=status, reason_code="ok", reviews=copy.deepcopy(response["reviews"]))
         if "whole_artifact_review" in response:
@@ -830,9 +975,9 @@ def consume(config: dict, *, artifact: Path, artifact_set_id: str | None,
             response["whole_artifact_review"] = copy.deepcopy(receipt["whole_artifact_review"])
         if _validate_reviews(response, request) != "accepted":
             raise PostRenderError("malformed_response")
-        _, measurements = build_wire(request)
-        if receipt["measurements"] != measurements:
+        if receipt["measurements"] != measurement_records(request):
             raise PostRenderError("identity_drift")
+        validate_receipt_chunks(request, receipt)
         return {"route": ROUTE, "raw_scan": b["scan"], "request": config["request"],
                 "receipt": config["receipt"], "provider": receipt["provider"], "model": receipt["model"],
                 "provider_invoked": True, "advisory_only": True, "input_kind": "post-render-metrics", "candidate_count": len(scan["issues"])}, None

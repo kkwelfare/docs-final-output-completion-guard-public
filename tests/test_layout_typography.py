@@ -302,7 +302,9 @@ def test_generated_artifact_jev_runs_without_legacy_opt_in_and_guard_reads_back(
     assert normal_scan["generated_artifact_jev"]["status"] == "not_invoked"
     assert normal_scan["generated_artifact_jev"]["evaluation_state"] == "error"
     assert normal_scan["generated_artifact_jev"]["reason_code"] == "evaluation_identity_unavailable"
-    assert guard._validate_scan_readback(normal_scan, artifact=normal_pdf, generated_jev_required=True) is None
+    # Plan C: an eligible generated PDF without live Jev evidence stops with a readable reason.
+    assert "reason_code=evaluation_identity_unavailable" in guard._validate_scan_readback(
+        normal_scan, artifact=normal_pdf, generated_jev_required=True)
 
     badge_pdf = _pdf(tmp_path / "badge-for-route.pdf", lambda page: (
         page.draw_circle((50, 50), 12, color=(0, 0, 0), fill=(0.9, 0.9, 0.9)),
@@ -352,8 +354,12 @@ def test_generated_artifact_jev_runs_without_legacy_opt_in_and_guard_reads_back(
         # recorded and no separate review attachment is required (master decision).
         assert scan["limited_visual_review"]["review_mode"] == "candidates-recorded-no-stop"
         assert scan["limited_visual_review"]["required"] is False
+        # Review candidates alone still do not stop (Jev requirement aside) ...
+        assert guard._validate_scan_readback(scan, artifact=badge_pdf, generated_jev_required=False) is None
+        # ... but fixture/failed Jev is not live evidence, so Plan C stops with a readable reason.
         error = guard._validate_scan_readback(scan, artifact=badge_pdf, generated_jev_required=True)
-        assert error is None
+        expected_code = "provider_error" if outcome == "provider_error" else "fixture_only"
+        assert error.startswith("AQ-LAYOUT-01: Jevの評価がないため完了できません") and f"reason_code={expected_code}" in error
 
 
 def test_generated_artifact_jev_same_task_identity_reaches_fixture_evaluation_via_checker(tmp_path):

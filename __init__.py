@@ -619,6 +619,11 @@ def _validate_scan_readback(
         generated_error = generated_artifact_jev_rules.validate_readback(scan, generated_state)
         if generated_error:
             return generated_error
+        # Plan C (master decision): an eligible generated PDF needs live Jev evidence for this
+        # artifact (every chunk when split, or correctly reused evidence). Jev results are unchanged.
+        jev_missing = generated_artifact_jev_rules.jev_required_block_reason(scan, generated_state)
+        if jev_missing:
+            return jev_missing
     limited_visual = scan.get("limited_visual_review")
     if isinstance(limited_visual, dict) and limited_visual.get("review_mode") == jev_post_render_rules.ROUTE:
         if visual_config is None or artifact is None:

@@ -324,8 +324,9 @@ def _jev_resolves_cjk_candidates(
                     "request_sha256": receipt["request_sha256"], "reviews": receipt["reviews"]}
         if jev_post_render._validate_reviews(response, request) != "accepted":
             return None
-        if receipt.get("measurements") != jev_post_render.build_wire(request)[1]:
+        if receipt.get("measurements") != jev_post_render.measurement_records(request):
             return None
+        jev_post_render.validate_receipt_chunks(request, receipt)
         return {"request": state["request"], "receipt": state["receipt"],
                 "candidate_set_digest": binding["candidate_set_digest"],
                 "artifact_sha256": binding["artifact"]["sha256"], "candidate_ids": sorted(by_id)}
@@ -918,6 +919,8 @@ def build_receipt(
                         "evaluation_state": generated_state["evaluation_state"],
                         "provider_invoked": generated_state.get("provider_invoked", False),
                         "provider_status": generated_state.get("provider_status"),
+                        "reason_code": generated_artifact_jev.effective_reason_code(generated_state),
+                        "wire_chunk_count": generated_state.get("wire_chunk_count"),
                         "request": generated_state.get("request"),
                         "receipt": generated_state.get("receipt"),
                     }, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")

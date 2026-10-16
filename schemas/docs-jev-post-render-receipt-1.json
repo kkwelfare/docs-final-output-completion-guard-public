@@ -269,6 +269,27 @@
       "minItems": 0,
       "maxItems": 20
     },
+    "wire_chunks": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "index": {"type": "integer", "minimum": 0, "maximum": 19},
+          "candidate_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"}
+          },
+          "wire_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "provider_invoked": {"type": "boolean"}
+        },
+        "required": ["index", "candidate_ids", "wire_sha256", "provider_invoked"]
+      }
+    },
     "whole_artifact_review": {
       "type": "object",
       "additionalProperties": false,
