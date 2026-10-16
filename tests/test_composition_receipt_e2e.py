@@ -98,12 +98,17 @@ def test_composition_review_is_coupled_to_hash_bound_layout_receipt(tmp_path):
     evidence = tmp_path / "evidence"; evidence.mkdir()
     for rule in common.CONTRACT_RULES:
         (evidence / f"{artifact.name}.{rule}.json").write_text(json.dumps(_check(rule, contract, artifact)))
-    blocked, code = checker.build_receipt(contract_path, evidence_dir=evidence)
-    assert code == 2 and blocked["status"] == "block"
-    layout = next(rule for rule in blocked["entries"][0]["rules"] if rule["id"] == "AQ-LAYOUT-01")
+    # Master decision: composition REVIEW_CANDIDATE items are recorded, not stopping.
+    first, code = checker.build_receipt(contract_path, evidence_dir=evidence)
+    assert code == 0 and first["status"] == "pass"
+    layout = next(rule for rule in first["entries"][0]["rules"] if rule["id"] == "AQ-LAYOUT-01")
     scan_path = Path(layout["evidence"]["path"]); scan = json.loads(scan_path.read_text())
+    assert scan["hard_issue_count"] == 0
     composition_candidates = [item for item in scan["issues"] if item["id"].startswith("composition-")]
-    candidate = composition_candidates[0]
+    assert composition_candidates
+    limited = scan["limited_visual_review"]
+    assert limited["required"] is False and limited["review_mode"] == "candidates-recorded-no-stop"
+    assert set(limited["candidate_ids"]) >= {item["id"] for item in composition_candidates}
     review_path = evidence / f"{artifact.name}.AQ-LAYOUT-01-REVIEW.json"
     review = {"schema_version": "docs-layout-visual-review-1", "status": "pass", "artifact_path": str(artifact.resolve()),
               "artifact_sha256": _sha(artifact), "scan_path": str(scan_path.resolve()), "scan_sha256": scan["reviewed_scan_sha256"],
@@ -113,8 +118,9 @@ def test_composition_review_is_coupled_to_hash_bound_layout_receipt(tmp_path):
                            "bbox_pdf_points": item["bbox_pdf_points"], "render_path": item["render_evidence"]["path"], "render_sha256": item["render_evidence"]["sha256"],
                            "affected_pages": item["affected_pages"]} for item in composition_candidates]}
     review_path.write_text(json.dumps(review))
+    # An existing AQ-LAYOUT-01-REVIEW record is harmless: accepted or rejected, it does not change the result.
     passed, code = checker.build_receipt(contract_path, evidence_dir=evidence)
     assert code == 0 and passed["status"] == "pass"
     review["reviews"][0]["status"] = "rejected"; review_path.write_text(json.dumps(review))
-    failed, code = checker.build_receipt(contract_path, evidence_dir=evidence)
-    assert code == 2 and failed["status"] == "block"
+    still, code = checker.build_receipt(contract_path, evidence_dir=evidence)
+    assert code == 0 and still["status"] == "pass"

@@ -582,11 +582,32 @@ def _live_jev_accepts_review_candidates(
             and limited.get("jev_resolution") == resolution)
 
 
+CANDIDATES_RECORDED_REVIEW_MODE = "candidates-recorded-no-stop"
+
+
+def _layout_review_route_opt_in(contract: dict[str, Any]) -> bool:
+    """True when the contract opts into a Jev overlap/design review route.
+
+    Those explicit opt-in routes keep their own review decision; only the default
+    route records REVIEW_CANDIDATE items without stopping.
+    """
+    quality = contract.get("artifact_quality")
+    layout = quality.get("layout_typography") if isinstance(quality, dict) else None
+    if not isinstance(layout, dict):
+        return False
+    for key in ("jev_overlap", "jev_design_evaluation", "jev_design", "jev_structural_evaluation"):
+        value = layout.get(key)
+        if isinstance(value, dict) and value.get("enabled") is True:
+            return True
+    return False
+
+
 def _validate_scan_readback(
     scan: dict[str, Any], *, review_path: Path | None = None,
     artifact_set_id: str | None = None,
     visual_config: dict[str, Any] | None = None, artifact: Path | None = None,
     producer: dict[str, Any] | None = None, generated_jev_required: bool = False,
+    review_route_opt_in: bool = False,
 ) -> str | None:
     """Recount scanner output and re-read the review instead of trusting status."""
     if generated_jev_required:
@@ -651,6 +672,14 @@ def _validate_scan_readback(
         return "AQ-LAYOUT-01: scan measurement basis is not pdf_points"
     # Candidates that live Jev accepted (re-confirmed above by the checker's own validator) need no separate
     # visual record; every other review candidate still requires the docs-layout-visual-review-2 attachment.
+    if (review and not hard and scan.get("status") == "pass"
+            and limited.get("review_mode") == CANDIDATES_RECORDED_REVIEW_MODE
+            and not review_route_opt_in and limited.get("required") is False
+            and limited.get("status") == "pass"
+            and limited.get("candidate_ids") == sorted(str(item.get("id")) for item in review)):
+        # Master decision: REVIEW_CANDIDATE alone does not stop completion; the
+        # candidates stay recorded in the scan. HARD_FAIL was already rejected above.
+        return None
     if review and not _live_jev_accepts_review_candidates(scan, limited, review, artifact):
         if review_path is None:
             return "AQ-LAYOUT-01: review attachment is missing"
@@ -862,6 +891,7 @@ def _validate_artifact_quality_receipt(contract_path: Path, receipt_path: Path) 
                     and isinstance(contract["artifact_quality"].get("layout_typography"), dict)
                     and contract["artifact_quality"]["layout_typography"].get("required") is True
                 ),
+                review_route_opt_in=_layout_review_route_opt_in(contract),
             )
             if scan_error:
                 return set(), scan_error

@@ -69,11 +69,14 @@ def prepare(
     *, artifacts: list[str], copies: list[str], source: str, checker: str,
     manifest_path: Path, receiver_receipt_path: Path,
     producer_task_id: str, producer_run_id: int,
-    receiver_task_id: str, receiver_run_id: int,
+    receiver_task_id: str | None = None, receiver_run_id: int | None = None,
 ) -> dict[str, Any]:
-    if (not isinstance(receiver_task_id, str) or not receiver_task_id.strip()
-            or isinstance(receiver_run_id, bool) or not isinstance(receiver_run_id, int) or receiver_run_id < 1):
-        raise ValueError("actual receiver task identity is required")
+    # Receiver task/run IDs are optional records; when supplied they must be real values.
+    if receiver_task_id is not None and (not isinstance(receiver_task_id, str) or not receiver_task_id.strip()):
+        raise ValueError("receiver task identity is malformed")
+    if receiver_run_id is not None and (
+            isinstance(receiver_run_id, bool) or not isinstance(receiver_run_id, int) or receiver_run_id < 1):
+        raise ValueError("receiver run identity is malformed")
     manifest_path = manifest_path.resolve()
     receiver_receipt_path = receiver_receipt_path.resolve()
     if manifest_path == receiver_receipt_path:
@@ -103,8 +106,8 @@ def prepare(
     receiver = {
         "status": "accepted",
         "artifact_set_id": manifest["artifact_set_id"],
-        "receiver_task_id": receiver_task_id,
-        "receiver_run_id": receiver_run_id,
+        **({"receiver_task_id": receiver_task_id} if receiver_task_id is not None else {}),
+        **({"receiver_run_id": receiver_run_id} if receiver_run_id is not None else {}),
         "copies": [
             {
                 "canonical_path": str(original),
@@ -159,8 +162,8 @@ def main() -> int:
     parser.add_argument("--receiver-receipt", required=True, type=Path)
     parser.add_argument("--producer-task-id", help="optional actual producer task identity")
     parser.add_argument("--producer-run-id", type=int, help="optional actual producer run ID")
-    parser.add_argument("--receiver-task-id", required=True, help="actual receiving task identity")
-    parser.add_argument("--receiver-run-id", required=True, type=int)
+    parser.add_argument("--receiver-task-id", help="optional actual receiving task identity")
+    parser.add_argument("--receiver-run-id", type=int, help="optional actual receiving run ID")
     args = parser.parse_args()
     try:
         result = prepare(

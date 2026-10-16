@@ -317,8 +317,9 @@ def build_manifest(
         return manifest if manifest.is_file() else None
     else:
         return None
-    if (producer_run_id is None) != (artifact_set_id is None):
-        raise ValueError("producer_run_id and artifact_set_id must be declared together")
+    if producer_run_id is not None and artifact_set_id is None:
+        # The run ID is an optional record; the artifact set is the identity binding.
+        raise ValueError("producer_run_id requires artifact_set_id")
     data = {
         "schema_version": SCHEMA_VERSION,
         "artifact_path": str(artifact),
@@ -327,13 +328,15 @@ def build_manifest(
         "renderer": renderer,
         "renders": renders,
     }
-    if producer_run_id is not None:
-        if isinstance(producer_run_id, bool) or not isinstance(producer_run_id, int) or producer_run_id < 0:
+    if producer_run_id is not None or artifact_set_id is not None:
+        if producer_run_id is not None and (
+                isinstance(producer_run_id, bool) or not isinstance(producer_run_id, int) or producer_run_id < 0):
             raise ValueError("producer_run_id must be a non-negative integer")
         if (not isinstance(artifact_set_id, str) or len(artifact_set_id) != 64
                 or any(char not in "0123456789abcdef" for char in artifact_set_id)):
             raise ValueError("artifact_set_id must be a sha256 value")
-        data["producer_run_id"] = producer_run_id
+        if producer_run_id is not None:
+            data["producer_run_id"] = producer_run_id
         data["artifact_set_id"] = artifact_set_id
     integrated = execution_contract_path is not None or producer_receipt_path is not None
     if integrated:
@@ -483,7 +486,9 @@ def validate_handle(
     if data.get("artifact_path") != str(artifact) or data.get("artifact_sha256") != _sha256(artifact):
         return ["AQ-DELIVERY-01: rendered readback artifact/hash mismatch"]
     if producer_run_id is not None or artifact_set_id is not None:
-        if data.get("producer_run_id") != producer_run_id or data.get("artifact_set_id") != artifact_set_id:
+        # artifact_set_id is the identity binding; a run ID is compared only when one is recorded.
+        if data.get("artifact_set_id") != artifact_set_id or (
+                producer_run_id is not None and data.get("producer_run_id") != producer_run_id):
             return ["AQ-DELIVERY-01: rendered readback run/artifact-set identity mismatch"]
     integrated = execution_contract_path is not None or producer_receipt_path is not None
     if integrated:

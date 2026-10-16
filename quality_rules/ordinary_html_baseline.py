@@ -186,7 +186,8 @@ def validate(contract_path: Path, artifacts: list[str]) -> str | None:
         return manifest_error or "finalization manifest is invalid"
     if manifest.get("state") != "accepted":
         return "finalization manifest is not accepted"
-    if (manifest.get("created_by_task_id") != browser["task_id"]
-            or manifest.get("created_by_run_id") != browser["run_id"]):
+    # Producer IDs are optional manifest records; compare only the ones recorded.
+    if ((manifest.get("created_by_task_id") is not None and manifest.get("created_by_task_id") != browser["task_id"])
+            or (manifest.get("created_by_run_id") is not None and manifest.get("created_by_run_id") != browser["run_id"])):
         return "HTML browser and finalization producer identity mismatch"
     return finalization.validate_receiver_copy(manifest, receiver_path, require_identity=True)

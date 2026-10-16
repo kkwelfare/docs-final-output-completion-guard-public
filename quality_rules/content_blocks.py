@@ -257,10 +257,9 @@ def validate_policy(policy: Any, *, source_path: Any = None) -> list[str]:
             return errors
     strict_identity = policy.get("strict_identity")
     if strict_identity is not None:
+        run_id = strict_identity.get("producer_run_id") if isinstance(strict_identity, dict) else None
         if (not isinstance(strict_identity, dict)
-                or not isinstance(strict_identity.get("producer_run_id"), int)
-                or isinstance(strict_identity.get("producer_run_id"), bool)
-                or strict_identity["producer_run_id"] < 0
+                or (run_id is not None and (not isinstance(run_id, int) or isinstance(run_id, bool) or run_id < 0))
                 or not _hash(strict_identity.get("artifact_set_id"))):
             return [f"{prefix}.strict_identity requires producer_run_id and artifact_set_id"]
     for scope in ("inter_block", "intra_block", "block_to_following_text"):
@@ -876,9 +875,10 @@ def load_manifest(policy: dict[str, Any], artifact: Path) -> tuple[dict[str, Any
                 relation_policy.get("required_relation_ids") != coverage.get("required_relation_ids")):
             errors.append("content_block_evidence: v2 required relation identity drift")
     strict_identity = policy.get("strict_identity")
+    # Master decision: a missing/placeholder producer run ID alone never stops the
+    # check. The artifact_set_id binding (checked file == delivered file) is kept.
     if isinstance(strict_identity, dict) and (
-            data.get("producer_run_id") != strict_identity.get("producer_run_id")
-            or data.get("artifact_set_id") != strict_identity.get("artifact_set_id")):
+            data.get("artifact_set_id") != strict_identity.get("artifact_set_id")):
         errors.append("content_block_evidence: run/artifact-set identity mismatch")
     return (data, errors) if not errors else (None, errors)
 

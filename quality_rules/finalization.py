@@ -203,10 +203,14 @@ def validate_manifest(
             return None, validate_handle(data.get("source"), "finalization source", include_size=True)
         if validate_handle(data.get("checker"), "finalization checker", include_size=True):
             return None, validate_handle(data.get("checker"), "finalization checker", include_size=True)
-        if not isinstance(data.get("created_by_task_id"), str) or not data["created_by_task_id"]:
-            return None, "finalization manifest producer task identity is missing"
-        if not isinstance(data.get("created_by_run_id"), int) or isinstance(data["created_by_run_id"], bool):
-            return None, "finalization manifest producer run identity is missing"
+        # Producer task/run IDs are optional records (master decision): absent/null
+        # values never fail. Present values must still be well-formed. Artifact
+        # identity is bound by the per-file sha256 and artifact_set_id above.
+        task_id, run_id = data.get("created_by_task_id"), data.get("created_by_run_id")
+        if task_id is not None and (not isinstance(task_id, str) or not task_id):
+            return None, "finalization manifest producer task identity is malformed"
+        if run_id is not None and (not isinstance(run_id, int) or isinstance(run_id, bool) or run_id < 0):
+            return None, "finalization manifest producer run identity is malformed"
     integrated_fields = ("execution_identity", "execution_contract", "producer_receipt", "renderer_receipts")
     integrated = any(field in data for field in integrated_fields)
     if require_execution_contract and not integrated:
@@ -224,7 +228,9 @@ def validate_manifest(
             return None, "invalid execution contract: " + "; ".join(contract_errors)
         if execution_contract.validate_identity(data.get("execution_identity"), contract, "finalization"):
             return None, "finalization execution identity mismatch"
-        if data.get("artifact_set_id") != contract.get("artifact_set_id") or data.get("created_by_run_id") != contract.get("producer_run_id"):
+        if data.get("artifact_set_id") != contract.get("artifact_set_id") or (
+                data.get("created_by_run_id") is not None
+                and data.get("created_by_run_id") != contract.get("producer_run_id")):
             return None, "finalization run/artifact-set identity mismatch"
         producer_handle = data.get("producer_receipt")
         error = validate_handle(producer_handle, "producer receipt", include_size=True)
@@ -250,10 +256,12 @@ def validate_receiver_copy(manifest: dict[str, Any], receipt_path: Path, *, requ
     if not isinstance(data, dict) or data.get("status") != "accepted" or data.get("artifact_set_id") != manifest.get("artifact_set_id"):
         return "receiver receipt is missing or does not accept the manifest"
     if require_identity:
-        if not isinstance(data.get("receiver_task_id"), str) or not data["receiver_task_id"]:
-            return "receiver receipt task identity is missing"
-        if not isinstance(data.get("receiver_run_id"), int) or isinstance(data["receiver_run_id"], bool):
-            return "receiver receipt run identity is missing"
+        # Receiver task/run IDs are optional records; only malformed present values fail.
+        task_id, run_id = data.get("receiver_task_id"), data.get("receiver_run_id")
+        if task_id is not None and (not isinstance(task_id, str) or not task_id):
+            return "receiver receipt task identity is malformed"
+        if run_id is not None and (not isinstance(run_id, int) or isinstance(run_id, bool) or run_id < 0):
+            return "receiver receipt run identity is malformed"
     by_source = {item["canonical_path"]: item for item in manifest["artifacts"]}
     copies = data.get("copies")
     if not isinstance(copies, list) or len(copies) != len(by_source):

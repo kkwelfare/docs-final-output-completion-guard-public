@@ -74,8 +74,8 @@ def main() -> int:
     parser.add_argument("--checker", default=ROOT / "check_docs_artifact.py", type=Path)
     parser.add_argument("--producer-task-id")
     parser.add_argument("--producer-run-id", type=int)
-    parser.add_argument("--receiver-task-id", required=True)
-    parser.add_argument("--receiver-run-id", required=True, type=int)
+    parser.add_argument("--receiver-task-id", help="optional actual receiving task identity")
+    parser.add_argument("--receiver-run-id", type=int, help="optional actual receiving run ID")
     args = parser.parse_args()
     if bool(args.producer_task_id) != (args.producer_run_id is not None):
         parser.error("pass both --producer-task-id and --producer-run-id, or neither when the original identity is unavailable")

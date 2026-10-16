@@ -1038,7 +1038,8 @@ def validate_bundle(
     errors = validate_identity(finalization.get("execution_identity"), contract, "finalization")
     if finalization.get("artifact_set_id") != contract["artifact_set_id"]:
         errors.append("finalization artifact_set_id mismatch")
-    if finalization.get("created_by_run_id") != contract["producer_run_id"]:
+    if (finalization.get("created_by_run_id") is not None
+            and finalization.get("created_by_run_id") != contract["producer_run_id"]):
         errors.append("finalization producer_run_id mismatch")
     expected_contract = file_handle(contract_path)
     expected_producer = file_handle(producer_receipt_path)

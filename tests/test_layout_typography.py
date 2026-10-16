@@ -348,10 +348,12 @@ def test_generated_artifact_jev_runs_without_legacy_opt_in_and_guard_reads_back(
         assert route["status"] == ("connection_failed" if outcome == "provider_error" else "evaluated")
         if outcome != "provider_error":
             assert route["provider_status"] == {"pass": "accepted", "uncertain": "uncertain", "fail": "repair_required"}[outcome]
-        # Fixture-only acceptance/uncertainty cannot bypass the owner's manual
-        # candidate disposition in the actual completion readback path.
+        # Jev stays advisory; with HARD_FAIL 0 the remaining REVIEW_CANDIDATE items are
+        # recorded and no separate review attachment is required (master decision).
+        assert scan["limited_visual_review"]["review_mode"] == "candidates-recorded-no-stop"
+        assert scan["limited_visual_review"]["required"] is False
         error = guard._validate_scan_readback(scan, artifact=badge_pdf, generated_jev_required=True)
-        assert error == "AQ-LAYOUT-01: review attachment is missing"
+        assert error is None
 
 
 def test_generated_artifact_jev_same_task_identity_reaches_fixture_evaluation_via_checker(tmp_path):
@@ -532,7 +534,7 @@ def test_mixed_pptx_pdf_runs_layout_only_for_pdf(tmp_path, monkeypatch):
 
 
 
-def test_soft_candidate_requires_exact_hash_bound_limited_review(tmp_path, monkeypatch):
+def test_soft_candidate_passes_without_review_record_and_existing_record_is_harmless(tmp_path, monkeypatch):
     checker = _load_checker()
     pdf = _pdf(tmp_path / "soft.pdf", lambda page: page.insert_text((30, 40), "English only"))
     evidence_dir = tmp_path / "review-evidence"
@@ -560,10 +562,12 @@ def test_soft_candidate_requires_exact_hash_bound_limited_review(tmp_path, monke
     monkeypatch.setattr(checker.layout_typography, "scan_pdf", fake_scan)
     first, _ = checker.build_receipt(contract_path, evidence_dir=evidence_dir)
     first_rule = next(rule for rule in first["entries"][0]["rules"] if rule["id"] == "AQ-LAYOUT-01")
-    assert first_rule["status"] == "fail"
+    assert first_rule["status"] == "pass"
     scan_path = Path(first_rule["evidence"]["path"])
     scan = json.loads(scan_path.read_text(encoding="utf-8"))
     candidate = scan["issues"][0]
+    assert scan["status"] == "pass" and scan["limited_visual_review"]["candidate_ids"] == ["pdf-soft-1"]
+    assert scan["limited_visual_review"]["required"] is False and scan["limited_visual_review"]["evidence"] is None
     render = candidate["render_evidence"]
     review_path = evidence_dir / f"{pdf.name}.AQ-LAYOUT-01-REVIEW.json"
     valid = {
@@ -580,16 +584,51 @@ def test_soft_candidate_requires_exact_hash_bound_limited_review(tmp_path, monke
     passed_rule = next(rule for rule in passed["entries"][0]["rules"] if rule["id"] == "AQ-LAYOUT-01")
     assert passed_rule["status"] == "pass"
 
+    # Existing review records, even broken or stale, neither help nor harm.
     for key, bad in (("issue_id", "unrelated"), ("render_sha256", "0" * 64)):
         broken = json.loads(json.dumps(valid))
         broken["reviews"][0][key] = bad
         review_path.write_text(json.dumps(broken), encoding="utf-8")
-        failed, _ = checker.build_receipt(contract_path, evidence_dir=evidence_dir)
-        assert next(rule for rule in failed["entries"][0]["rules"] if rule["id"] == "AQ-LAYOUT-01")["status"] == "fail"
+        again, _ = checker.build_receipt(contract_path, evidence_dir=evidence_dir)
+        assert next(rule for rule in again["entries"][0]["rules"] if rule["id"] == "AQ-LAYOUT-01")["status"] == "pass"
     stale = json.loads(json.dumps(valid)); stale["scan_sha256"] = "f" * 64
     review_path.write_text(json.dumps(stale), encoding="utf-8")
-    failed, _ = checker.build_receipt(contract_path, evidence_dir=evidence_dir)
-    assert next(rule for rule in failed["entries"][0]["rules"] if rule["id"] == "AQ-LAYOUT-01")["status"] == "fail"
+    again, _ = checker.build_receipt(contract_path, evidence_dir=evidence_dir)
+    assert next(rule for rule in again["entries"][0]["rules"] if rule["id"] == "AQ-LAYOUT-01")["status"] == "pass"
+
+
+def test_hard_fail_still_fails_even_with_accepted_review_record(tmp_path, monkeypatch):
+    checker = _load_checker()
+    pdf = _pdf(tmp_path / "hard.pdf", lambda page: page.insert_text((30, 40), "English only"))
+    evidence_dir = tmp_path / "hard-evidence"
+    contract_path = tmp_path / "hard-layout.json"
+    contract_path.write_text(json.dumps({
+        "artifact_kind": "pdf", "artifacts": [str(pdf)],
+        "artifact_quality": {"required": True, "layout_typography": {"required": True}},
+    }), encoding="utf-8")
+
+    def fake_scan(artifact, config, *, render_manifest=None):
+        return {
+            "schema_version": "docs-layout-typography-scan-3", "artifact_sha256": common.sha256(artifact),
+            "status": "block", "hard_issue_count": 1, "review_candidate_count": 1, "pages": [{"page": 1, "line_count": 1}],
+            "issues": [
+                {"id": "pdf-hard-1", "rule": "text_overlap", "severity": "hard", "bucket": "HARD_FAIL", "page": 1,
+                 "bbox_pdf_points": [10, 10, 200, 35]},
+                {"id": "pdf-soft-1", "rule": "short_final_line_candidate", "severity": "review", "page": 1,
+                 "bbox_pdf_points": [10, 40, 200, 60]},
+            ],
+        }
+
+    monkeypatch.setattr(checker.layout_typography, "scan_pdf", fake_scan)
+    receipt, code = checker.build_receipt(contract_path, evidence_dir=evidence_dir)
+    rule = next(item for item in receipt["entries"][0]["rules"] if item["id"] == "AQ-LAYOUT-01")
+    scan = json.loads(Path(rule["evidence"]["path"]).read_text(encoding="utf-8"))
+    assert code == 2 and receipt["status"] == "block" and rule["status"] == "fail"
+    assert scan["status"] == "block" and scan["limited_visual_review"]["status"] == "review-required"
+    (evidence_dir / f"{pdf.name}.AQ-LAYOUT-01-REVIEW.json").write_text(json.dumps({
+        "schema_version": "docs-layout-visual-review-1", "status": "pass", "reviews": []}), encoding="utf-8")
+    receipt, code = checker.build_receipt(contract_path, evidence_dir=evidence_dir)
+    assert code == 2 and next(item for item in receipt["entries"][0]["rules"] if item["id"] == "AQ-LAYOUT-01")["status"] == "fail"
 
 
 def test_candidate_zero_skips_review_path_and_records_no_vision_invocation(tmp_path, monkeypatch):
@@ -618,7 +657,8 @@ def test_candidate_zero_skips_review_path_and_records_no_vision_invocation(tmp_p
         "required": False,
         "candidate_count": 0,
         "candidate_pages": [],
-        "review_mode": "manual-receipt-only",
+        "candidate_ids": [],
+        "review_mode": "candidates-recorded-no-stop",
         "vision_model_invoked": False,
         "evidence": None,
         "status": "pass",

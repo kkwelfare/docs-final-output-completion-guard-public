@@ -269,10 +269,12 @@ def test_declared_html_composition_evidence_reaches_existing_aq_layout_surface_r
     receipt, code = checker.build_receipt(contract_path, evidence_dir=evidence_dir)
     pdf_entry = next(entry for entry in receipt["entries"] if entry["artifact"]["path"] == str(result["pdf"].resolve()))
     layout = next(rule for rule in pdf_entry["rules"] if rule["id"] == "AQ-LAYOUT-01")
-    assert code == 2 and receipt["status"] == "block"
-    assert layout["status"] == "fail"
+    # REVIEW_CANDIDATE-only surface readback no longer stops the receipt.
+    assert code == 0 and receipt["status"] == "pass"
+    assert layout["status"] == "pass"
     layout_scan = json.loads(Path(layout["evidence"]["path"]).read_text(encoding="utf-8"))
     assert layout_scan["hard_issue_count"] == 0
+    assert layout_scan["limited_visual_review"]["review_mode"] == "candidates-recorded-no-stop"
     assert layout_scan["surface_readback"]["path"] == pdf_entry["actual_delivery_readback"]["path"]
     readback_path = Path(pdf_entry["actual_delivery_readback"]["path"])
     readback = json.loads(readback_path.read_text(encoding="utf-8"))

@@ -333,6 +333,9 @@ def _jev_resolves_cjk_candidates(
         return None
 
 
+CANDIDATES_RECORDED_REVIEW_MODE = "candidates-recorded-no-stop"
+
+
 def _layout_review_passes(
     review_path: Path, artifact: Path, scan_path: Path,
     candidates: list[dict[str, Any]], *, artifact_set_id: str | None = None,
@@ -794,7 +797,7 @@ def build_receipt(
                 scan_config["visible_inset_required"] = _visible_inset_required(contract)
                 if finalization_manifest is not None:
                     identity = {
-                        "producer_run_id": finalization_manifest["created_by_run_id"],
+                        "producer_run_id": finalization_manifest.get("created_by_run_id"),
                         "artifact_set_id": finalization_manifest["artifact_set_id"],
                     }
                     content_policy = scan_config.get("content_block_policy")
@@ -804,7 +807,7 @@ def build_receipt(
                         scan_config["content_block_policy"] = content_policy
                 scan = layout_typography.scan_pdf(artifact, scan_config, render_manifest=readback_manifest)
                 if finalization_manifest is not None:
-                    scan["producer_run_id"] = finalization_manifest["created_by_run_id"]
+                    scan["producer_run_id"] = finalization_manifest.get("created_by_run_id")
                     scan["artifact_set_id"] = finalization_manifest["artifact_set_id"]
                 source_spec = contract.get("authoritative_source")
                 source_value = source_spec.get("path") if isinstance(source_spec, dict) else None
@@ -1115,17 +1118,19 @@ def build_receipt(
                         "status": "pass",
                     }
                 else:
-                    review_passed = True if not candidates else _layout_review_passes(
-                        review_path, artifact, scan_path, candidates,
-                        artifact_set_id=finalization_manifest.get("artifact_set_id") if finalization_manifest else None,
-                    )
+                    # Master decision: REVIEW_CANDIDATE items are recorded as information
+                    # and do not stop the check; no separate AQ-LAYOUT-01-REVIEW record is
+                    # required (an existing one is ignored). HARD_FAIL still blocks via
+                    # hard_failed / scan["status"] below.
+                    review_passed = not hard_failed
                     limited_review = {
-                        "required": bool(candidates),
+                        "required": False,
                         "candidate_count": len(candidates),
                         "candidate_pages": sorted({item["page"] for item in candidates if isinstance(item.get("page"), int)}),
-                        "review_mode": "manual-receipt-only",
+                        "candidate_ids": sorted(str(item.get("id")) for item in candidates),
+                        "review_mode": CANDIDATES_RECORDED_REVIEW_MODE,
                         "vision_model_invoked": False,
-                        "evidence": _handle(review_path) if review_passed and review_path.is_file() else None,
+                        "evidence": None,
                         "status": "pass" if review_passed else "review-required",
                     }
                 if visual_enabled:
@@ -1205,7 +1210,7 @@ def build_receipt(
         if finalization_manifest is not None:
             errors.extend(rendered_readback.validate_handle(
                 entry["actual_delivery_readback"], artifact,
-                producer_run_id=finalization_manifest["created_by_run_id"],
+                producer_run_id=finalization_manifest.get("created_by_run_id"),
                 artifact_set_id=finalization_manifest["artifact_set_id"],
                 execution_contract_path=execution_contract_path,
                 producer_receipt_path=producer_receipt_path,

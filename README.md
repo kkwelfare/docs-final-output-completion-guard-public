@@ -98,13 +98,12 @@ python3 /path/to/installed-plugin/scripts/prepare_ordinary_docx_baseline.py \\
   --representative-page /absolute/preview-first.png --representative-page /absolute/preview-last.png \\
   --final-output-receipt /absolute/final-output-receipt.json \\
   --manifest /absolute/finalization-manifest.json --receiver-receipt /absolute/receiver-receipt.json \\
-  --contract /absolute/ordinary-docx-baseline-contract.json \\
-  --receiver-task-id <actual-receiver-task-id> --receiver-run-id <actual-receiver-run-id>
+  --contract /absolute/ordinary-docx-baseline-contract.json
 ```
 
-If the producer identity is known, also pass `--producer-task-id <actual-producer-task-id> --producer-run-id <actual-producer-run-id>`; otherwise omit both flags.
+If the producer identity is known, also pass `--producer-task-id <actual-producer-task-id> --producer-run-id <actual-producer-run-id>`; otherwise omit both flags. Likewise, pass `--receiver-task-id <actual-receiver-task-id> --receiver-run-id <actual-receiver-run-id>` only when the actual receiving identity is available.
 
-Supply absolute paths to the DOCX, distinct received copy, authoritative source/readback, actual DOCX readback JSON, actual render readback JSON/PDF/page images, and genuine final-output receipt; choose new paths for manifest, receiver receipt, and contract. Provide producer task/run identity only when it is actually known; if unavailable, omit both flags rather than inventing provenance. Always provide the actual receiving task/run identity. The helper prepares records only; it does not submit Kanban completion, run quality measurements, or call a provider.
+Supply absolute paths to the DOCX, distinct received copy, authoritative source/readback, actual DOCX readback JSON, actual render readback JSON/PDF/page images, and genuine final-output receipt; choose new paths for manifest, receiver receipt, and contract. Provide producer task/run identity only when it is actually known; if unavailable, omit both flags rather than inventing provenance. Receiver task/run identity is optional in the same way. Task/run IDs are records only: a missing ID never blocks, a present ID must be well-formed, and the artifact itself stays bound by per-file sha256, `artifact_set_id`, and the receiver-copy hash. The helper prepares records only; it does not submit Kanban completion, run quality measurements, or call a provider.
 
 In the ordinary completion metadata, keep `verification.final_output_filter.receipts` and set `verification.artifact_quality.contract` to the generated contract; no synthetic artifact-quality receipt is used. The registered completion hook validates this explicit baseline contract and its hashes/readbacks. Other artifact kinds, PDFs, and full artifact-quality contracts remain on the existing strict receipt route. This local handoff format is not a claim of universal Hermes/Kanban enforcement: install the plugin hook in the intended host and exercise the real completion path there.
 
