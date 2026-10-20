@@ -9,10 +9,13 @@ requirement (that stays with generated_artifact_jev).
 
 Two layers, both off by default:
   1. Whole-page judgment: one request per page (capped by ``max_pages``; skipped
-     pages are recorded, never silently dropped).
+     pages are recorded, never silently dropped).  An optional ``pages`` list
+     (1-based, e.g. ``[1, 3, 5]``) limits this to the chosen pages; every other
+     page is recorded as ``not_selected``.  Without ``pages`` all pages are judged.
   2. Candidate judgment: one request per review-candidate group with a
      downscaled whole-page image plus a context crop and measured values as text
-     (capped by ``max_candidate_calls``).
+     (capped by ``max_candidate_calls``).  With ``pages`` set, only candidates
+     on the chosen pages are judged; others are recorded as ``page_not_selected``.
 Box (location) is asked in a separate request only after a Choice/Noul verdict
 says a page/candidate is likely off, because Box always returns a box.
 
@@ -65,7 +68,8 @@ DIFFERS_LABEL = "differs_from_surroundings"
 VERDICTS = ("repair_required", "acceptable", "insufficient_information")
 CONFIG_KEYS = {"enabled", "allow_live_provider", "max_pages", "max_candidate_calls",
                "max_box_calls", "timeout_seconds", "likely_threshold",
-               "repair_confidence_threshold", "intent_threshold"}
+               "repair_confidence_threshold", "intent_threshold", "pages"}
+MAX_SELECTED_PAGES = 256
 CONTEXT_MARGIN_RATIO = 0.25
 CONTEXT_MARGIN_MIN_PT = 36.0
 MAX_CROP_ZOOM = 4.0
@@ -97,7 +101,8 @@ def normalize_config(config: Any) -> tuple[dict | None, str | None]:
            "likely_threshold": config.get("likely_threshold", DEFAULT_LIKELY_THRESHOLD),
            "repair_confidence_threshold": config.get("repair_confidence_threshold",
                                                      DEFAULT_REPAIR_CONFIDENCE_THRESHOLD),
-           "intent_threshold": config.get("intent_threshold", None)}
+           "intent_threshold": config.get("intent_threshold", None),
+           "pages": config.get("pages", None)}
     if not isinstance(out["allow_live_provider"], bool):
         return None, "invalid_config"
     for key, low, high in (("max_pages", 0, 256), ("max_candidate_calls", 0, 64), ("max_box_calls", 0, 64)):
@@ -116,6 +121,13 @@ def normalize_config(config: Any) -> tuple[dict | None, str | None]:
             or not 0.0 < value <= out["likely_threshold"]):
         return None, "invalid_config"
     out["intent_threshold"] = float(value)
+    pages = out["pages"]
+    if pages is not None:  # 1-based page selection; out-of-range is checked against the PDF in run()
+        if (not isinstance(pages, list) or not pages or len(pages) > MAX_SELECTED_PAGES
+                or any(isinstance(n, bool) or not isinstance(n, int) or n < 1 for n in pages)
+                or len(set(pages)) != len(pages)):
+            return None, "invalid_config"
+        out["pages"] = sorted(pages)
     return out, None
 
 
@@ -513,12 +525,21 @@ def run(*, artifact: Path, candidates: list[dict], config: Any,
 
     try:
         page_count = doc.page_count
-        # Layer 1: whole-page judgment for every page, explicitly capped.
+        selected = set(cfg["pages"]) if cfg["pages"] is not None else None
+        if selected is not None and max(selected) > page_count:
+            result.update(reason_code="invalid_config", config_error="pages_out_of_range", page_count=page_count)
+            return result
+        # Layer 1: whole-page judgment for every (selected) page, explicitly capped.
+        judged = 0
         for index in range(page_count):
             number = index + 1
-            if index >= cfg["max_pages"]:
+            if selected is not None and number not in selected:
+                result["skipped_pages"].append({"page": number, "reason": "not_selected"})
+                continue
+            if judged >= cfg["max_pages"]:
                 result["skipped_pages"].append({"page": number, "reason": "max_pages"})
                 continue
+            judged += 1
             entry: dict[str, Any] = {"page": number}
             try:
                 page = doc[index]
@@ -540,6 +561,9 @@ def run(*, artifact: Path, candidates: list[dict], config: Any,
         calls = 0
         for c in review:
             cid = c.get("id")
+            if selected is not None and c.get("page") not in selected:
+                result["skipped_candidates"].append({"id": cid, "reason": "page_not_selected"})
+                continue
             if calls >= cfg["max_candidate_calls"]:
                 result["skipped_candidates"].append({"id": cid, "reason": "max_candidate_calls"})
                 continue
@@ -595,6 +619,7 @@ def summary(result: dict, handle: dict | None) -> dict:
             "model": MODEL, "status": result.get("status"), "reason_code": result.get("reason_code"),
             "provider_calls": result.get("provider_calls", 0), "evidence": handle,
             "labels": copy.deepcopy(result.get("labels", {})),
+            "selected_pages": copy.deepcopy((result.get("config") or {}).get("pages")),
             "skipped_pages": len(result.get("skipped_pages", [])),
             "skipped_candidates": len(result.get("skipped_candidates", []))}
 
@@ -606,6 +631,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--scan", help="AQ-LAYOUT-01 scan JSON whose review candidates are judged")
     p.add_argument("--candidate-id", action="append", default=[], help="limit candidate layer to these ids")
     p.add_argument("--out", required=True)
+    p.add_argument("--page", type=int, action="append", default=None,
+                   help="judge only these 1-based pages (repeatable); default all pages")
     p.add_argument("--max-pages", type=int, default=DEFAULT_MAX_PAGES)
     p.add_argument("--max-candidate-calls", type=int, default=DEFAULT_MAX_CANDIDATE_CALLS)
     p.add_argument("--max-box-calls", type=int, default=DEFAULT_MAX_BOX_CALLS)
@@ -620,7 +647,8 @@ def main(argv: list[str] | None = None) -> int:
             candidates = [c for c in candidates if c.get("id") in wanted]
     result = run(artifact=Path(args.pdf), candidates=candidates,
                  config={"enabled": True, "allow_live_provider": args.live, "max_pages": args.max_pages,
-                         "max_candidate_calls": args.max_candidate_calls, "max_box_calls": args.max_box_calls})
+                         "max_candidate_calls": args.max_candidate_calls, "max_box_calls": args.max_box_calls,
+                         **({"pages": args.page} if args.page else {})})
     handle = write_evidence(result, Path(args.out))
     print(json.dumps(summary(result, handle), ensure_ascii=False))
     return 0

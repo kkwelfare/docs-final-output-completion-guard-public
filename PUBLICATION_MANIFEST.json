@@ -19,6 +19,7 @@
         "enabled": false,
         "allow_live_provider": false
       },
+      "page_selection": "optional pages list (1-based) limits whole-page and candidate judgment to the chosen pages; unselected pages and candidates are recorded as not_selected / page_not_selected; absent means all pages up to max_pages",
       "model": "jev-1.14.0",
       "provider": "TypeSafe SystemOne",
       "request_header": "TypeSafe-Danger-Zone-Images: true",
