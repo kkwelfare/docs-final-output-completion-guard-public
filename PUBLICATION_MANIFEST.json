@@ -11,7 +11,23 @@
     "canonical_checker_root": "canonical_checker/ (vendored from public repository kkwelfare/final-output-local-filter, version 1.0.0)",
     "canonical_checker_files": ["LICENSE", "check_document.py", "filter_core.py", "plugin.yaml", "tests/test_filter_core.py"],
     "provider_route": "optional advisory only; never authoritative",
-    "image_transport": "forbidden",
+    "image_transport": {
+      "mode": "optional_advisory_default_off",
+      "route": "quality_rules/jev_visual_review.py",
+      "enable_key": "artifact_quality.layout_typography.jev_visual_image_review",
+      "defaults": {
+        "enabled": false,
+        "allow_live_provider": false
+      },
+      "model": "jev-1.14.0",
+      "provider": "TypeSafe SystemOne",
+      "request_header": "TypeSafe-Danger-Zone-Images: true",
+      "transmitted": "rendered PDF page images (downscaled whole page, plus a context crop for review candidates) with page numbers and measured numeric candidate values; no extracted document text or file paths",
+      "blocks_completion": false,
+      "satisfies_plan_c": false,
+      "fallback": "none",
+      "retry": "none"
+    },
     "typed_evidence_boundary": "docs-typed-evidence-boundary-1"
   },
   "portable_components": {

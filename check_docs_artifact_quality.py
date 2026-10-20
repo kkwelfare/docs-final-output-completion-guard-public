@@ -11,6 +11,7 @@ from typing import Any, Callable
 import pymupdf
 from PIL import Image
 from quality_rules import jev_post_render
+from quality_rules import jev_visual_review
 
 from quality_rules import cjk_font_selector, common, composition, execution_contract, fax, finalization, generated_artifact_jev, generic_pdf_repair_adapter, html_pdf_harness, jev_overlap, layout_typography, readability, rendered_readback, repair_controller, safe_wrap, source_typography, visible_ink
 
@@ -540,6 +541,7 @@ def build_receipt(
     jev_reviewer_identity: dict[str, Any] | None = None,
     jev_fixture_adapter: Callable[[dict[str, Any]], Any] | None = None,
     jev_fixture_identity: dict[str, Any] | None = None,
+    jev_visual_transport: Callable[..., Any] | None = None,
 ) -> tuple[dict[str, Any], int]:
     contract_path = contract_path.resolve(strict=True)
     contract = json.loads(contract_path.read_text(encoding="utf-8"))
@@ -1162,6 +1164,22 @@ def build_receipt(
                 scan["reviewed_scan_sha256"] = candidate_scan_sha256
                 scan["limited_visual_review"] = limited_review
                 scan["status"] = "block" if hard_failed else "pass" if review_passed else "review"
+                image_review_config = scan_config.get("jev_visual_image_review")
+                if image_review_config is not None:
+                    # Optional advisory Jev 1.14 image judgment. Runs after the
+                    # status above is fixed and cannot change it, hard failures,
+                    # or Plan C; failures are recorded, never raised.
+                    try:
+                        image_result = jev_visual_review.run(
+                            artifact=artifact, candidates=candidates,
+                            config=image_review_config, transport=jev_visual_transport)
+                        image_handle = (jev_visual_review.write_evidence(
+                            image_result, evidence / f"{_key(artifact)}.AQ-LAYOUT-01.JEV-IMAGE.json")
+                            if image_result.get("status") != "not_run" or image_result.get("provider_calls") else None)
+                        scan["jev_visual_image_review"] = jev_visual_review.summary(image_result, image_handle)
+                    except Exception as exc:  # advisory route must never break the check
+                        scan["jev_visual_image_review"] = {"route": jev_visual_review.ROUTE, "advisory_only": True,
+                                                           "status": "not_run", "reason_code": type(exc).__name__}
                 scan_path.write_text(json.dumps(scan, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
                 if standard_design_route and design_result is not None:
                     receipt["workflow_state"] = design_result.get("workflow_state", "review_required")
