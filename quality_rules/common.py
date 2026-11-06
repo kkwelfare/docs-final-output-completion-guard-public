@@ -180,6 +180,115 @@ LINE_SPACING_PRESERVE = (
     "text", "explicit_breaks", "font_size", "character_spacing", "word_spacing",
     "font_family", "font_weight", "horizontal_geometry", "hanging_indent",
 )
+# Optional editable source files delivered next to their rendered PDF (for
+# example ``deck.pptx`` + ``deck.pdf``).  A valid declaration keeps the
+# companion in ``artifacts`` -- the finalization manifest, receiver copy, and
+# final-output receipts still pin it by hash -- but removes it from the
+# artifact-quality target set; the strict rules measure the PDF named by
+# ``source_of``.  Absence leaves target selection unchanged.
+SOURCE_COMPANION_SUFFIXES = frozenset({
+    ".pptx", ".docx", ".xlsx", ".odt", ".ods", ".odp", ".html", ".htm",
+})
+SOURCE_COMPANION_FIELDS = frozenset({"path", "sha256", "source_of"})
+
+
+def _source_companion_declaration(contract: Any) -> tuple[bool, Any]:
+    quality = contract.get("artifact_quality") if isinstance(contract, dict) else None
+    if not isinstance(quality, dict) or "source_companions" not in quality:
+        return False, None
+    return True, quality["source_companions"]
+
+
+def validate_source_companions(contract: Any) -> list[str]:
+    """Validate the optional ``artifact_quality.source_companions`` declaration.
+
+    Absence returns ``[]``.  Each entry must be an object with exactly ``path``,
+    ``sha256`` and ``source_of``: ``path`` is a declared artifact with an
+    editable-source suffix whose current bytes match ``sha256``; ``source_of``
+    is a different declared ``.pdf`` artifact that is not itself a companion.
+    Duplicate companion paths and companions that are also explicit
+    ``rule_targets`` are rejected.
+    """
+    declared, value = _source_companion_declaration(contract)
+    if not declared:
+        return []
+    label = "AQ-SCOPE-01: artifact_quality.source_companions"
+    if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
+        return [f"{label} must be a list of objects"]
+    declared_artifacts: dict[str, str] = {}
+    raw_artifacts = contract.get("artifacts")
+    if isinstance(raw_artifacts, list):
+        for item in raw_artifacts:
+            if isinstance(item, str) and Path(item).is_absolute():
+                declared_artifacts.setdefault(str(Path(item).resolve()), item)
+    quality = contract.get("artifact_quality")
+    rule_targets = quality.get("rule_targets") if isinstance(quality, dict) else None
+    explicit_targets = {
+        str(Path(item).resolve()) for item in rule_targets
+        if isinstance(item, str) and Path(item).is_absolute()
+    } if isinstance(rule_targets, list) else set()
+    all_companions = {
+        str(Path(item["path"]).resolve()) for item in value
+        if isinstance(item.get("path"), str) and Path(item["path"]).is_absolute()
+    }
+    allowed = ", ".join(sorted(SOURCE_COMPANION_SUFFIXES))
+    errors: list[str] = []
+    seen: set[str] = set()
+    for index, item in enumerate(value):
+        entry = f"{label}[{index}]"
+        if set(item) != SOURCE_COMPANION_FIELDS:
+            errors.append(f"{entry} must contain exactly path, sha256, and source_of")
+            continue
+        raw_path, digest, raw_source = item["path"], item["sha256"], item["source_of"]
+        if not isinstance(raw_path, str) or not Path(raw_path).is_absolute():
+            errors.append(f"{entry}.path must be an absolute path")
+            continue
+        companion = str(Path(raw_path).resolve())
+        if companion not in declared_artifacts:
+            errors.append(f"{entry}.path is not a declared artifact")
+            continue
+        if companion in seen:
+            errors.append(f"{entry}.path duplicates another source companion")
+            continue
+        seen.add(companion)
+        # Check the declared, artifact-list, and resolved spellings so a symlink
+        # cannot pass an editable suffix through to a PDF (or vice versa).
+        suffixes = {Path(spelling).suffix.lower() for spelling in (raw_path, declared_artifacts[companion], companion)}
+        if not suffixes <= SOURCE_COMPANION_SUFFIXES:
+            errors.append(f"{entry}.path must be an editable source type ({allowed})")
+            continue
+        if companion in explicit_targets:
+            errors.append(f"{entry}.path is also listed in artifact_quality.rule_targets")
+            continue
+        if not _hash(digest):
+            errors.append(f"{entry}.sha256 must be a lowercase hex SHA-256")
+            continue
+        try:
+            actual = sha256(Path(companion)) if Path(companion).is_file() else None
+        except OSError:
+            actual = None
+        if actual is None:
+            errors.append(f"{entry}.path is missing or unreadable")
+            continue
+        if digest != actual:
+            errors.append(f"{entry}.sha256 does not match the current companion file")
+            continue
+        source = str(Path(raw_source).resolve()) if isinstance(raw_source, str) and Path(raw_source).is_absolute() else None
+        if (source is None or source not in declared_artifacts or source == companion
+                or {Path(spelling).suffix.lower() for spelling in (raw_source, declared_artifacts[source], source)} != {".pdf"}):
+            errors.append(f"{entry}.source_of must name a different declared .pdf artifact")
+            continue
+        if source in all_companions:
+            errors.append(f"{entry}.source_of must not itself be a source companion")
+    return errors
+
+
+def source_companion_paths(contract: Any) -> set[str]:
+    """Resolved companion paths of a fully valid declaration; otherwise empty."""
+    declared, value = _source_companion_declaration(contract)
+    if not declared or validate_source_companions(contract):
+        return set()
+    return {str(Path(item["path"]).resolve()) for item in value}
 
 
 def validate_line_spacing_policy(value: Any) -> list[str]:
@@ -220,7 +329,11 @@ def validate_line_spacing_policy(value: Any) -> list[str]:
 
 
 def target_artifacts(contract: Any) -> list[Path]:
-    """Select quality targets without treating ordinary text as output art."""
+    """Select quality targets without treating ordinary text as output art.
+
+    Validly declared ``artifact_quality.source_companions`` are excluded; an
+    invalid declaration excludes nothing (fail closed).
+    """
     if not isinstance(contract, dict):
         return []
     quality = contract.get("artifact_quality")
@@ -233,12 +346,14 @@ def target_artifacts(contract: Any) -> list[Path]:
     artifacts = contract.get("artifacts")
     if not isinstance(artifacts, list):
         return []
+    companions = source_companion_paths(contract)
     return [
         Path(value)
         for value in artifacts
         if isinstance(value, str)
         and Path(value).is_absolute()
         and (Path(value).suffix.lower() in TARGET_SUFFIXES or str(Path(value).resolve()) in explicit)
+        and str(Path(value).resolve()) not in companions
     ]
 
 
@@ -447,6 +562,7 @@ def validate_contract(contract: Any) -> list[str]:
             errors.append("AQ-SCOPE-01: artifact_quality.rule_targets must contain absolute paths")
         elif any(item not in (contract.get("artifacts") or []) for item in rule_targets):
             errors.append("AQ-SCOPE-01: artifact_quality.rule_targets must be declared artifacts")
+    errors.extend(validate_source_companions(contract))
     if not isinstance(contract.get("artifact_kind"), str) or not contract["artifact_kind"]:
         errors.append("AQ-DELIVERY-01: artifact_kind is required")
     artifacts = contract.get("artifacts")

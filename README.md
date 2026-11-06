@@ -79,6 +79,23 @@ The public adapters inspect UTF-8 text/Markdown, JSON, DOCX, PPTX, and PDF input
 
 For the separate portable producer route, provider review remains disabled by default and is advisory-only when explicitly opted in; it cannot override a deterministic local block. Portable tests and the host integration readback use no provider call.
 
+## Editable source companions
+
+Some deliveries ship an editable source next to its rendered PDF, such as `deck.pptx` + `deck.pdf`. The strict artifact-quality rules measure the PDF; they cannot produce a rendered readback for an Office source. To deliver the source, declare it in the optional `artifact_quality.source_companions` list:
+
+    "source_companions": [{"path": "/abs/deck.pptx", "sha256": "<sha256 of deck.pptx>", "source_of": "/abs/deck.pdf"}]
+
+Each entry has exactly `path`, `sha256`, and `source_of`, with these constraints:
+
+- `path` names a declared artifact with a `.pptx`, `.docx`, `.xlsx`, `.odt`, `.ods`, `.odp`, `.html`, or `.htm` suffix.
+- The file's current bytes match `sha256`.
+- `source_of` names a different declared `.pdf` artifact that is not itself a companion.
+- A path may appear only once, and a companion may not also be listed in `rule_targets`.
+
+Any violation makes the contract invalid (`AQ-SCOPE-01`). An invalid declaration removes nothing from the target set.
+
+A valid companion stays in `artifacts`. Delivered artifacts must still match the declared set exactly, and the companion is still pinned by hash in three places: the finalization manifest, the receiver copy, and the final-output receipt (a non-text entry with `--no-applicable-reason`). It is removed only from the quality-target set that the checker and completion guard share, so no artifact-quality entry is produced or expected for it. An `.html`/`.htm` companion still goes through the existing AQ-HTML-PDF-01 binding on its PDF. Contracts without the field behave exactly as before.
+
 ## External dependency setup
 
 A receiving environment supplies its own Python interpreter and package environment. The verification host used Python 3.11 with the packages needed by the existing quality rules and tests, including `pytest`, `jsonschema`, `PyMuPDF`, Pillow, `python-docx`, `python-pptx`, `lxml`, `defusedxml`, and PyYAML. These observations are a setup checklist, not a support promise. Hermes supplies the plugin admission command and host API when the plugin is installed as a plugin; no `requires_hermes` range is asserted.

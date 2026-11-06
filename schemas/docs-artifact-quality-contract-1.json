@@ -44,6 +44,19 @@
         "required": {"const": true},
         "extensions": {"type": "array", "items": {"type": "string"}},
         "rule_targets": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^/"}},
+        "source_companions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "sha256", "source_of"],
+            "properties": {
+              "path": {"type": "string", "pattern": "^/"},
+              "sha256": {"$ref": "#/$defs/hash"},
+              "source_of": {"type": "string", "pattern": "^/"}
+            }
+          }
+        },
         "layout_typography": {
           "type": "object",
           "required": ["required"],
