@@ -51,8 +51,10 @@ def _is_sha256(value: Any) -> bool:
 
 def _task_id(task_id: str | None = None) -> str:
     value = task_id
-    if value is None:
-        value = os.environ.get("HERMES_KANBAN_TASK_ID", "") or os.environ.get("HERMES_KANBAN_TASK", "")
+    bound = os.environ.get("HERMES_KANBAN_TASK_ID", "") or os.environ.get("HERMES_KANBAN_TASK", "")
+    if value is None or bound:
+        # A gateway-managed worker's hook task_id is a session id, not the card; the dispatcher binding wins.
+        value = bound
     if isinstance(value, str) and value.startswith("{"):
         try:
             value = json.loads(value).get("id", "")

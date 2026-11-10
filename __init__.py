@@ -972,8 +972,13 @@ def _pre_tool_call(*, tool_name: str = "", args: Any = None, task_id: str | None
     )
     if production_block is not None:
         return production_block
-    if tool_name != "kanban_complete":
+    if tool_name not in {"kanban_complete", "kanban_request_review"}:
         return None
+    if os.environ.get("HERMES_KANBAN_TASK") or os.environ.get("HERMES_KANBAN_TASK_ID"):
+        # In a gateway-managed Kanban worker the hook task_id is the agent's sandbox key (a session id),
+        # not the card. The dispatcher binds the owned card in the environment, so use the same
+        # environment-bound path as a worker whose hook passes no task_id.
+        task_id = None
     task = task_id if task_id is not None else (
         os.environ.get("HERMES_KANBAN_TASK") or os.environ.get("HERMES_KANBAN_TASK_ID")
     )
