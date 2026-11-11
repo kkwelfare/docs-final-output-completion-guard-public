@@ -108,6 +108,11 @@ def measure(artifact: Path, page_number: int, bbox: list, render: dict) -> dict:
                 raise ValueError('identity_drift')
         fonts = font_records(doc, page, selection)
         glyphs = []; count = 0; replacement = 0
+        # A PDF writer may split one font into several same-named subsets
+        # (LibreOffice starts a new subset after 256 glyphs). Text extraction
+        # reports only the name, so a glyph maps to the whole same-name group:
+        # the lowest xref represents it, and every member must pass the checks.
+        group_members = set()
         for block in page.get_text('rawdict')['blocks']:
             for line in block.get('lines', []):
                 for span in line['spans']:
@@ -120,9 +125,11 @@ def measure(artifact: Path, page_number: int, bbox: list, render: dict) -> dict:
                         if not is_cjk(char['c']):
                             continue
                         matches = [f for f in fonts if normalized(span['font']) in f['_names']]
+                        if len(matches) > 1:
+                            group_members.update(f['xref'] for f in matches)
                         glyphs.append({'bbox':[round(v,4) for v in box],
                             'contained':region.contains(box), 'span_flags':int(span['flags']),
-                            'font_xref':matches[0]['xref'] if len(matches) == 1 else 0})
+                            'font_xref':min(f['xref'] for f in matches) if matches else 0})
                         if len(glyphs) > MAX_GLYPHS:
                             raise ValueError('insufficient_evidence')
         # Numeric raster summaries remain local-derived proxies. No pixels leave.
@@ -135,7 +142,7 @@ def measure(artifact: Path, page_number: int, bbox: list, render: dict) -> dict:
             'gray_mean':round(sum(samples) / len(samples),4),
             'samples_sha256':sha(samples), 'basis':'local_grayscale_1x_no_pixels_transmitted'}
         used = {g['font_xref'] for g in glyphs}
-        mapped = [f for f in fonts if f['xref'] in used]
+        mapped = [f for f in fonts if f['xref'] in used or f['xref'] in group_members]
         sufficient = bool(glyphs and not replacement and 0 not in used and
             all(g['contained'] for g in glyphs) and selected['available'] and
             all(f['embedded'] and f['to_unicode_present'] for f in mapped) and
